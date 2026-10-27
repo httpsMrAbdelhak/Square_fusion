@@ -99,7 +99,11 @@ seed_sources() {
 </map>
 XML
   adb push "$OUT/square_fusion_sources.xml" /data/local/tmp/sources.xml > /dev/null
-  adb shell run-as "$PKG" sh -c 'mkdir -p shared_prefs && cp /data/local/tmp/sources.xml shared_prefs/square_fusion_sources.xml'
+  adb shell chmod 644 /data/local/tmp/sources.xml
+  # One string for the device's shell, so run-as gets the whole command.
+  adb shell "run-as $PKG sh -c 'mkdir -p shared_prefs && cp /data/local/tmp/sources.xml shared_prefs/square_fusion_sources.xml'"
+  adb shell "run-as $PKG cat shared_prefs/square_fusion_sources.xml" | grep -q "test-addon" \
+    && echo "   sources seeded (enabled=$1)" || { echo "FAIL could not seed the sources"; fail=1; }
 }
 
 tones() { grep -c "GET /tone.wav" fake-addon.log 2>/dev/null || echo 0; }
