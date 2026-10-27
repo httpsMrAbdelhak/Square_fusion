@@ -831,15 +831,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         followKeptYouTube()
-        // Square Fusion: the Library follows the Spotify library as it syncs.
-        viewModelScope.launch {
-            SpotifyLibraryStore.state.collect {
-                (_state.value as? UiState.Ready)?.let { ready ->
-                    _state.value = ready.copy(playlists = withLocalFiles(ready.playlists))
-                }
-                _followedArtists.value = withSpotifyArtists(_followedArtists.value)
-            }
-        }
         // A video in an open list, put right as its song is found; see
         // YouTubeBackend.asSongs, which opens the list without waiting for all.
         viewModelScope.launch {
@@ -6856,6 +6847,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .mapNotNull { it.message?.takeIf(String::isNotBlank) }
             .toList()
         return parts.firstOrNull() ?: error::class.java.simpleName
+    }
+
+    // Square Fusion: the Library follows the Spotify library as it syncs.
+    // Last in the class: the first value is collected at once, and it reads
+    // properties declared further up.
+    init {
+        viewModelScope.launch {
+            SpotifyLibraryStore.state.collect {
+                (_state.value as? UiState.Ready)?.let { ready ->
+                    _state.value = ready.copy(playlists = withLocalFiles(ready.playlists))
+                }
+                _followedArtists.value = withSpotifyArtists(_followedArtists.value)
+            }
+        }
     }
 
     private companion object {
