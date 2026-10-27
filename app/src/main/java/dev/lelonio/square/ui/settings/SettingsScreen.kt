@@ -2521,6 +2521,8 @@ private val LICENCES = listOf(
     "yt-dlp ejs" to "Unlicense",
     "meriyah" to "ISC",
     "astring" to "MIT",
+    // Square Fusion: addons, JioSaavn, Spotify library and icons come from BitChord.
+    "BitChord" to "GPL-3.0",
 )
 
 private const val GITHUB_USER = "Lelonio"

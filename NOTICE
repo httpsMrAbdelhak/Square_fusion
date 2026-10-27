@@ -1,0 +1,76 @@
+Square Fusion
+=============
+
+Square Fusion is a modified version of Square, combined with code and artwork
+from BitChord. The combined work is distributed under the GNU General Public
+License, version 3 (see LICENSE). No additional terms apply.
+
+Corresponding source: https://github.com/httpsMrAbdelhak/Square_fusion — every
+APK published by this repository's workflow names the exact commit it was built
+from (release notes, workflow summary, and BuildConfig.SOURCE_COMMIT).
+
+
+Square
+------
+Copyright (C) the Square contributors — https://github.com/Lelonio/Square
+License: GPL-3.0
+Square is the base of this project. Its own third-party notices (librespot,
+Bungee, AndroidLiquidGlass, Phosphor Icons, Coil, Spicy Lyrics, OkHttp,
+Retrofit, NewPipeExtractor, the Metrolist InnerTube module, yt-dlp ejs,
+meriyah, astring, ...) are unchanged and remain listed in the app's
+Settings > About > Licences and in the files they come with.
+
+Modifications to Square in this repository (2026, Square Fusion):
+  - application id dev.lelonio.square.fusion, name "Square Fusion";
+  - Square's self-updater switched off (BuildConfig.SELF_UPDATE = false);
+  - Square's release and Telegram workflows replaced by .github/workflows/fusion.yml;
+  - additions under app/src/main/java/dev/lelonio/square/fusion/ and
+    app/src/main/java/dev/lelonio/square/ui/settings/FusionSections.kt;
+  - small, commented hooks in YouTubePlayerFactory, MixerRateProcessor,
+    PcmMixer (MixerSlot.level), YouTubeDownloads, TouchRefreshRate,
+    SettingsScreen, SquareApp, SquareApplication and AndroidManifest.xml.
+  The full history is in this repository's git log.
+
+
+BitChord
+--------
+Copyright (C) the BitChord contributors — https://github.com/kushagrasinghx/BitChord
+License: GPL-3.0
+
+Code ported or adapted from BitChord (each file says which BitChord file it
+comes from and what was changed):
+  - addon protocol: data/sources/MusicSource.kt, addon/AddonModels.kt,
+    addon/AddonClient.kt, addon/SourceFormats.kt, AddonSource.kt,
+    SourceKind.kt, SourceRegistry.kt, SourceResolver.kt, TrackMatcher.kt
+  - JioSaavn: data/jiosaavn/JioSaavnService.kt, data/sources/JioSaavnSource.kt
+  - Spotify library: auth/SpotifyLoginScreen.kt, data/canvas/SpotifyToken.kt,
+    shared/.../data/spotify/SpotifyLibrary.kt
+  - audio: data/sources/DeviceCodecs.kt, playback/audio/LosslessOutput.kt,
+    playback/audio/bluetooth/BluetoothAudioTracker.kt
+  - AppIcon.kt, ui/performance/DisplayRefreshRates.kt
+
+Artwork copied from BitChord without modification (byte-identical files):
+  app/src/main/res/mipmap-*/ic_glass_*.png, ic_liquid_glass*, ic_samsung_glass*,
+  ic_pixel_glass*, drawable/ic_launcher_background.xml,
+  drawable/ic_launcher_foreground.xml. BitChord's own launcher icon
+  (mipmap-anydpi/ic_launcher.xml and mipmap-*/ic_launcher.webp) is included
+  under the file name bitchord_ic_launcher, contents unchanged, so that it does
+  not replace Square's ic_launcher.
+
+Not ported: BitChord's MODULE system (third-party JavaScript run in QuickJS).
+
+
+New dependencies
+----------------
+Test only (not in the APK):
+  - com.squareup.okhttp3:mockwebserver 4.12.0 — Apache-2.0
+  - org.jetbrains.kotlinx:kotlinx-coroutines-test 1.9.0 — Apache-2.0
+No new runtime dependency: the additions use libraries Square already ships
+(OkHttp, kotlinx.serialization, kotlinx.coroutines, Media3, AndroidX Security).
+
+
+Trademarks and services
+-----------------------
+Spotify, YouTube Music, JioSaavn and Dolby Atmos are trademarks of their
+owners. This project is not affiliated with or endorsed by them. See
+docs/FUSION.md for the limits and terms that apply to each service.

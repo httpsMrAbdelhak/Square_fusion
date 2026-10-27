@@ -27,6 +27,9 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    outputs:
+      version: ${{ steps.id.outputs.version }}
+      build: ${{ steps.id.outputs.build }}
     steps:
       - uses: actions/checkout@v4
 
@@ -76,13 +79,38 @@ jobs:
           fi
 
       - name: Unit tests
-        run: ./gradlew :app:testDevUnitTest --stacktrace -PfusionBuild=${{ steps.id.outputs.build }}
+        run: |
+          set -o pipefail
+          ./gradlew :app:testDevUnitTest --stacktrace -PfusionBuild=${{ steps.id.outputs.build }} 2>&1 | tee "$RUNNER_TEMP/tests.log"
 
       - name: Build release APK
-        run: >
-          ./gradlew :app:assembleRelease --stacktrace
-          -PfusionBuild=${{ steps.id.outputs.build }}
-          -PsourceCommit=${{ steps.id.outputs.sha }}
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleRelease --stacktrace \
+            -PfusionBuild=${{ steps.id.outputs.build }} \
+            -PsourceCommit=${{ steps.id.outputs.sha }} 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      # The diagnosis as annotations on the run page, readable without
+      # signing in: compiler errors, failed tests and Gradle's own summary.
+      - name: Explain failure
+        if: failure()
+        run: |
+          for log in "$RUNNER_TEMP/tests.log" "$RUNNER_TEMP/build.log"; do
+            [ -f "$log" ] || continue
+            grep -E "^e: |FAILED|Exception|What went wrong|^> |error:" "$log" | grep -v "^> Task" | head -n 120 > "$RUNNER_TEMP/errors.txt" || true
+            split -l 12 "$RUNNER_TEMP/errors.txt" "$RUNNER_TEMP/chunk-"
+            for chunk in "$RUNNER_TEMP"/chunk-*; do
+              [ -f "$chunk" ] || continue
+              msg=$(sed 's/%/%25/g' "$chunk" | awk '{printf "%s%%0A", $0}')
+              echo "::error title=$(basename "$log")::$msg"
+              rm "$chunk"
+            done
+          done
+          for xml in app/build/test-results/*/*.xml; do
+            [ -f "$xml" ] || continue
+            grep -q "<failure" "$xml" && echo "::error title=test failure::$(basename "$xml"): $(grep -o '<failure message="[^"]*' "$xml" | head -n 3 | cut -c1-300 | tr '\n' ' ')"
+          done
+          exit 0
 
       - name: Verify APK
         run: |
@@ -149,4 +177,55 @@ jobs:
           path: |
             app/build/reports/
             app/build/test-results/
+          if-no-files-found: ignore
+
+  # Installs the APK on an emulator and checks launch, intents, links, icon
+  # aliases, background/resume and screen off/on. Does not block the release:
+  # its result and screenshots are attached to it.
+  smoke:
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: square-fusion-*
+          merge-multiple: true
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Smoke test on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash -c 'set -o pipefail; bash scripts/fusion-smoke.sh "$(ls square-fusion-*-universal.apk | head -n 1)" 2>&1 | tee smoke-log.txt'
+
+      - name: Attach results to the release
+        if: always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -f smoke-log.txt ] && cp smoke-log.txt smoke/ 2>/dev/null || true
+          if [ -d smoke ]; then
+            zip -qr smoke-results.zip smoke smoke-log.txt || true
+            gh release upload "fusion-${{ needs.apk.outputs.build }}" smoke-results.zip smoke-log.txt --clobber || true
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-${{ needs.apk.outputs.version }}
+          path: |
+            smoke/
+            smoke-log.txt
           if-no-files-found: ignore
