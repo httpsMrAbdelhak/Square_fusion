@@ -61,4 +61,6 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
+import os
+open("fake-addon.pid", "w").write(str(os.getpid()))
 ThreadingHTTPServer(("0.0.0.0", 8765), Handler).serve_forever()
