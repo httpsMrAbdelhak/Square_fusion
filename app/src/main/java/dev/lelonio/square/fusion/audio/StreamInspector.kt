@@ -137,6 +137,7 @@ object StreamInspector {
     /** Called where the mixer's resampler is configured: the PCM as it reaches the mixer. */
     @OptIn(UnstableApi::class)
     fun onChainConfigured(format: AudioProcessor.AudioFormat) {
+        dev.lelonio.square.fusion.FusionLog.d("mixer input: ${format.sampleRate} Hz ${format.channelCount} ch encoding ${format.encoding}")
         val bits = when (format.encoding) {
             C.ENCODING_PCM_16BIT -> 16
             C.ENCODING_PCM_24BIT, C.ENCODING_PCM_24BIT_BIG_ENDIAN -> 24
@@ -173,6 +174,10 @@ object StreamInspector {
             val bitrate = listOf(format.averageBitrate, format.bitrate, format.peakBitrate)
                 .firstOrNull { it != Format.NO_VALUE && it > 0 }?.let { it / 1000 }
             val current = _report.value
+            dev.lelonio.square.fusion.FusionLog.d(
+                "decoder input: ${format.sampleMimeType} ${format.sampleRate} Hz ${format.channelCount} ch " +
+                    "${bits ?: "?"} bit ${bitrate ?: "?"} kbps (announced: ${current.announced?.format?.summary ?: "none"})",
+            )
             _report.value = current.copy(
                 received = Received(
                     mimeType = format.sampleMimeType,

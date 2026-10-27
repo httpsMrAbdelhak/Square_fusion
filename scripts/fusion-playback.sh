@@ -128,6 +128,13 @@ else
   cat "$OUT/addon-logcat.txt"
 fi
 
+grep -E "decoder input|mixer input" "$OUT/addon-logcat.txt" | tail -n 3 | sed 's/^.*SquareFusion: /     /'
+if grep -q "decoder input: audio/raw 44100 Hz 2 ch 16 bit" "$OUT/addon-logcat.txt"; then
+  echo "OK   decoded format matches what the addon announced (WAV 16-bit 44.1 kHz)"
+else
+  echo "WARN decoded format not confirmed in the log"
+fi
+
 if [ "$playing" = 1 ]; then
   step "notification"
   if adb shell dumpsys notification --noredact | grep -A60 "pkg=$PKG" | grep -qiE "MediaStyle|mediaSession|category=transport|template=android.app.Notification\$MediaStyle"; then

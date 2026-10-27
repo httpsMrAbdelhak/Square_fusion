@@ -233,7 +233,7 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash -c 'set -o pipefail; bash scripts/fusion-smoke.sh "$(ls square-fusion-*-universal.apk | head -n 1)" 2>&1 | tee smoke-log.txt; s1=$?; bash scripts/fusion-instrumented.sh instrumented 2>&1 | tee instrumented-log.txt; s2=$?; (python3 scripts/fake-addon.py > /dev/null 2>&1 &) ; sleep 2; bash scripts/fusion-playback.sh 2>&1 | tee playback-log.txt; s3=$?; pkill -f fake-addon.py; [ $s1 = 0 ] && [ $s2 = 0 ] && [ $s3 = 0 ]'
+          script: bash -c 'set -o pipefail; bash scripts/fusion-smoke.sh "$(ls square-fusion-*-universal.apk | head -n 1)" 2>&1 | tee smoke-log.txt; s1=$?; bash scripts/fusion-instrumented.sh instrumented 2>&1 | tee instrumented-log.txt; s2=$?; (python3 scripts/fake-addon.py > /dev/null 2>&1 &) ; sleep 2; bash scripts/fusion-playback.sh 2>&1 | tee playback-log.txt; s3=$?; pkill -f "fake-add[o]n.py"; [ $s1 = 0 ] && [ $s2 = 0 ] && [ $s3 = 0 ]'
 
       - name: Attach results to the release
         if: always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

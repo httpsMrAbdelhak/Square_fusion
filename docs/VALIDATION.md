@@ -70,7 +70,26 @@ retour à Square), Performance (désactivé par défaut, 60 Hz proposé une fois
 activé), section Spotify (« Se connecter »).
 
 ### Lecture réelle (`playback-log.txt`)
-RÉSULTATS_LECTURE
+Sur le build debug (même code, sans R8), avec un addon de test local
+(`scripts/fake-addon.py`, qui répond à toute recherche et diffuse un WAV) :
+
+| Étape | Résultat |
+|---|---|
+| Choix de YouTube Music, ouverture d'un morceau depuis l'accueil | OK |
+| Le morceau est servi par l'addon (`substitute …: Fusion test addon: WAV · 16-bit · 44.1 kHz`, requêtes `/search`, `/stream`, `/tone.wav` reçues, `quality=HIGH` en Wi-Fi) | OK |
+| Format décodé par ExoPlayer comparé à l'annonce | journalisé à chaque lecture (`decoder input: …`) |
+| Session média en lecture (état 3) | OK |
+| Notification multimédia publiée | OK |
+| Lecture continue en arrière-plan | OK |
+| Lecture continue écran éteint (20 s) | OK |
+| Pause et reprise par touche média | OK |
+| Morceau suivant par touche média (nouvelle recherche à l'addon) | OK |
+| Addon désactivé : il n'est plus interrogé, le morceau part vers YouTube | OK |
+| Lecture YouTube elle-même | **non vérifiable ici** : YouTube refuse les flux anonymes au réseau du runner (« This song plays only when signed in ») ; Square affiche son message et passe au suivant, sans plantage |
+
+Les commandes de l'écran de verrouillage, du volet de notifications et d'un
+casque agissent sur la même session média que les touches testées ; leur
+affichage n'a pas été vérifié à l'œil.
 
 ## 4. À vérifier sur votre téléphone
 
