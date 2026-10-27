@@ -203,7 +203,8 @@ jobs:
       - name: Smoke test on an emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 33
+          # Android 11 images translate ARM code; the app ships ARM only.
+          api-level: 30
           target: google_apis
           arch: x86_64
           disable-animations: true
