@@ -6,8 +6,6 @@ import dev.lelonio.square.fusion.audio.StreamInspector
 import dev.lelonio.square.fusion.jiosaavn.JioSaavnService
 import dev.lelonio.square.fusion.jiosaavn.selectBestSaavnStream
 import dev.lelonio.square.fusion.sources.StreamFormat
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -99,12 +97,11 @@ class FusionAudioTest {
 
     @Test
     fun saavnServiceParsesAndSurvivesApiChanges() {
-        val server = MockWebServer()
-        server.start()
+        val server = TestServer()
         try {
-            val service = JioSaavnService(server.url("/api.php").toString())
-            server.enqueue(
-                MockResponse().setBody(
+            val service = JioSaavnService(server.url("/api.php"))
+            server.queue.add(
+                TestServer.Reply(body =
                     """{"results":[{"id":"s1","title":"Song","image":"http://c/150x150.jpg",
                        "more_info":{"album":"Al","duration":"201","artistMap":{"primary_artists":[{"name":"Art"}]}}}]}""",
                 ),
@@ -113,23 +110,23 @@ class FusionAudioTest {
             assertEquals("s1", rows.single().id)
             assertEquals("Art", rows.single().moreInfo.artistMap.primaryArtists.single().name)
             // No spoofed location header is sent.
-            val sent = server.takeRequest()
-            assertNull(sent.getHeader("X-Forwarded-For"))
-            assertEquals("search.getResults", sent.requestUrl!!.queryParameter("__call"))
+            val sent = server.seen.single()
+            assertNull(sent.headers["x-forwarded-for"])
+            assertEquals("search.getResults", sent.query["__call"])
 
-            server.enqueue(
-                MockResponse().setBody(
+            server.queue.add(
+                TestServer.Reply(body =
                     """{"s1":{"id":"s1","more_info":{"encrypted_media_url":"${encrypt("https://aac.saavncdn.com/s1_160.mp4")}","320kbps":"true"}}}""",
                 ),
             )
             assertEquals("https://aac.saavncdn.com/s1_320.mp4", service.streamFor("s1")?.url)
 
             // An API change, an outage, garbage: empty, never a crash.
-            server.enqueue(MockResponse().setBody("""{"unexpected":true}"""))
+            server.queue.add(TestServer.Reply(body = """{"unexpected":true}"""))
             assertTrue(service.searchSongs("x").isEmpty())
-            server.enqueue(MockResponse().setResponseCode(500))
+            server.queue.add(TestServer.Reply(500))
             assertTrue(service.searchSongs("x").isEmpty())
-            server.enqueue(MockResponse().setBody("<html>"))
+            server.queue.add(TestServer.Reply(body = "<html>"))
             assertNull(service.streamFor("s1"))
         } finally {
             server.shutdown()

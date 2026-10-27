@@ -39,6 +39,9 @@ object Fusion {
     lateinit var resolver: SourceResolver
         private set
 
+    /** The last decision per song: when, what, and with which source list. */
+    private val decided = ConcurrentHashMap<String, Triple<Long, SourceStream?, List<dev.lelonio.square.fusion.sources.SourceConfig>>>()
+
     /** What the queue said about each item (title, artist, length), by media id. */
     private val hints = ConcurrentHashMap<String, TrackMatcher.Target>()
 
@@ -106,6 +109,12 @@ object Fusion {
     fun substituteBlocking(mediaId: String, videoId: String): SourceStream? {
         if (!initialised || !registry.hasEnabledSources()) return null
         val target = hints[mediaId] ?: return null
+        // ExoPlayer opens the stream again on every seek and retry: the answer
+        // (a stream, or "YouTube") is kept for the song a while, so a seek
+        // neither searches again nor switches source halfway through.
+        val now = System.currentTimeMillis()
+        decided[mediaId]?.takeIf { now - it.first < DECISION_TTL_MS && it.third == registry.configs.value }
+            ?.let { return it.second }
         return try {
             val outcome = runBlocking {
                 withTimeoutOrNull(TOTAL_BUDGET_MS) { resolver.resolve(target, requestNow()) }
@@ -121,6 +130,8 @@ object Fusion {
                 },
             )
             FusionLog.d("substitute $videoId: ${outcome?.tried?.joinToString(" / ") ?: "timed out"}")
+            decided[mediaId] = Triple(now, stream, registry.configs.value)
+            if (decided.size > 256) decided.entries.minByOrNull { it.value.first }?.let { decided.remove(it.key) }
             stream
         } catch (t: Throwable) {
             FusionLog.w("substitute failed for $videoId: ${t.message}")
@@ -160,6 +171,9 @@ object Fusion {
     }
 
     const val YOUTUBE = "YouTube Music"
+
+    /** Within an addon's stream URL lifetime (the spec assumes an hour). */
+    private const val DECISION_TTL_MS = 20 * 60 * 1000L
 
     /** How long a song waits on the sources before YouTube plays it. */
     private const val TOTAL_BUDGET_MS = 12_000L

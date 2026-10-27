@@ -19,10 +19,6 @@ import dev.lelonio.square.fusion.sources.addon.SourceFormats
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
-import okhttp3.mockwebserver.Dispatcher
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
-import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -40,9 +36,9 @@ import java.util.concurrent.TimeUnit
  */
 class AddonSourceTest {
 
-    private lateinit var server: MockWebServer
-    private val routes = mutableMapOf<String, MockResponse>()
-    private val seen = mutableListOf<RecordedRequest>()
+    private lateinit var server: TestServer
+    private val routes get() = server.routes
+    private val seen get() = server.seen
 
     private val client = OkHttpClient.Builder()
         .readTimeout(1, TimeUnit.SECONDS)
@@ -51,24 +47,15 @@ class AddonSourceTest {
 
     @Before
     fun start() {
-        server = MockWebServer()
-        server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse {
-                synchronized(seen) { seen += request }
-                val path = request.requestUrl!!.encodedPath
-                return routes[path] ?: MockResponse().setResponseCode(404)
-            }
-        }
-        server.start()
+        server = TestServer()
     }
 
     @After
     fun stop() = server.shutdown()
 
-    private fun base() = server.url("/addon").toString().trimEnd('/')
+    private fun base() = server.url("/addon")
 
-    private fun json(body: String, code: Int = 200) = MockResponse().setResponseCode(code)
-        .setHeader("Content-Type", "application/json").setBody(body)
+    private fun json(body: String, code: Int = 200) = TestServer.Reply(code, body)
 
     private fun manifest(extra: String = "") = json(
         """{"id":"test.addon","name":"Test","version":"1.2","resources":["search","stream"]$extra}""",
@@ -122,8 +109,8 @@ class AddonSourceTest {
         assertEquals(24, stream.format.bitDepth)
         assertFalse(stream.format.codecInferred)
         // The quality was asked for by name.
-        val streamCall = seen.first { it.requestUrl!!.encodedPath == "/addon/stream/t1" }
-        assertEquals("LOSSLESS", streamCall.requestUrl!!.queryParameter("quality"))
+        val streamCall = seen.first { it.path == "/addon/stream/t1" }
+        assertEquals("LOSSLESS", streamCall.query["quality"])
     }
 
     @Test
@@ -134,8 +121,8 @@ class AddonSourceTest {
         routes["/addon/search"] = json(searchBody)
         source().search("x", 5, StreamRequest.Lossless)
         source().search("y", 5, StreamRequest.Capped(96))
-        val qualities = seen.filter { it.requestUrl!!.encodedPath == "/addon/search" }
-            .map { it.requestUrl!!.queryParameter("quality") }
+        val qualities = seen.filter { it.path == "/addon/search" }
+            .map { it.query["quality"] }
         assertEquals(listOf("hifi", "low"), qualities)
     }
 
@@ -203,7 +190,7 @@ class AddonSourceTest {
     @Test
     fun slowAddonTimesOutAndResolverFallsBack() = runBlocking {
         routes["/addon/manifest.json"] = manifest()
-        routes["/addon/search"] = json(searchBody).setBodyDelay(5, TimeUnit.SECONDS)
+        routes["/addon/search"] = json(searchBody).copy(delayMs = 5_000)
         val resolver = SourceResolver({ listOf(source()) }, perSourceTimeoutMs = 3_000)
         val outcome = resolver.resolve(target, StreamRequest.Best)
         assertNull(outcome.stream)

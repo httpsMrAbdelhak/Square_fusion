@@ -264,12 +264,16 @@ internal fun FusionSourcesPage(contentPadding: PaddingValues, header: @Composabl
                         TextButton(
                             enabled = !busy && detected != null,
                             onClick = {
-                                val found = detected ?: return@TextButton
+                                val found = detected
+                                if (found == null) {
+                                    verdict = null
+                                } else {
                                 val added = registry.add(SourceKind.ADDON, found.baseUrl, found.manifest.displayName)
                                 registry.updatePolicy(added.id, found.manifest.downloadsAllowed, found.manifest.requiresLosslessOutput)
                                 url = ""
                                 verdict = null
                                 detected = null
+                                }
                             },
                         ) { Text(stringResource(R.string.fusion_add)) }
                     }
@@ -390,13 +394,13 @@ internal fun FusionStreamInfoPage(contentPadding: PaddingValues, header: @Compos
                 val format = announced?.format
                 InfoRow(
                     stringResource(R.string.fusion_codec),
-                    format?.codec?.uppercase(Locale.ROOT)?.let { if (format.codecInferred) "$it (${stringResource(R.string.fusion_inferred)})" else it } ?: unknown,
+                    format?.codec?.uppercase(Locale.ROOT)?.let { if (format?.codecInferred == true) "$it (${stringResource(R.string.fusion_inferred)})" else it } ?: unknown,
                 )
                 InfoRow(stringResource(R.string.fusion_sample_rate), hz(format?.sampleRateHz))
                 InfoRow(stringResource(R.string.fusion_bit_depth), bits(format?.bitDepth))
                 InfoRow(
                     stringResource(R.string.fusion_bitrate),
-                    format?.kbps?.let { if (format.kbpsInferred) "≈ $it kbps (${stringResource(R.string.fusion_inferred)})" else "$it kbps" } ?: unknown,
+                    format?.kbps?.let { if (format?.kbpsInferred == true) "≈ $it kbps (${stringResource(R.string.fusion_inferred)})" else "$it kbps" } ?: unknown,
                 )
                 Note(stringResource(R.string.fusion_announced_note))
             }
