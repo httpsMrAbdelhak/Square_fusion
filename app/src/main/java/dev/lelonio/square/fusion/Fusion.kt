@@ -23,7 +23,10 @@ object Fusion {
         val appContext = context.applicationContext
         app = appContext
         settings = FusionSettings(appContext)
-        runCatching { dev.lelonio.square.fusion.spotify.SpotifyFreeAccount.init(appContext) }
+        runCatching {
+            dev.lelonio.square.fusion.spotify.SpotifyFreeAccount.init(appContext)
+            dev.lelonio.square.fusion.spotify.SpotifyLibraryStore.init(appContext)
+        }
             .onFailure { FusionLog.w("Spotify library unavailable: ${it.message}") }
     }
 }

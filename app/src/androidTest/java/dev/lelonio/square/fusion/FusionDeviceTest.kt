@@ -5,11 +5,7 @@ import android.hardware.display.DisplayManager
 import android.view.Display
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import dev.lelonio.square.fusion.audio.DeviceCodecs
-import dev.lelonio.square.fusion.audio.LosslessOutput
-import dev.lelonio.square.fusion.audio.Normalization
 import dev.lelonio.square.fusion.display.RefreshRates
-import dev.lelonio.square.fusion.sources.SourceKind
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -73,25 +69,12 @@ class FusionDeviceTest {
     @Test
     fun fusionIsInitialisedWithSquareDefaults() {
         assertTrue(Fusion.initialised)
-        assertFalse(Fusion.settings.normalization.value)
         assertFalse(Fusion.settings.chooseRefreshRate.value)
-        assertFalse(Fusion.registry.configs.value.any { it.kind == SourceKind.JIOSAAVN && it.enabled })
-        // With nothing configured, a song is never offered to a source.
-        assertNull(Fusion.substituteBlocking("ytmusic:track:dQw4w9WgXcQ", "dQw4w9WgXcQ"))
-    }
-
-    @Test
-    fun registryPersistsInSharedPreferences() {
-        val added = Fusion.registry.add(SourceKind.ADDON, "https://addon.invalid", "Test")
-        try {
-            val prefs = context.getSharedPreferences("square_fusion_sources", 0).getString("sources", "")!!
-            assertTrue(prefs.contains("addon.invalid"))
-            Fusion.registry.setEnabled(added.id, false)
-            assertFalse(Fusion.registry.config(added.id)!!.enabled)
-        } finally {
-            Fusion.registry.remove(added.id)
-        }
-        assertNull(Fusion.registry.config(added.id))
+        // YouTube Music is the only backend, whatever was saved before.
+        val app = context.applicationContext as dev.lelonio.square.SquareApplication
+        assertEquals(dev.lelonio.square.backend.BackendId.YOUTUBE_MUSIC, app.preferences.backend.value)
+        app.preferences.setBackend(dev.lelonio.square.backend.BackendId.SPOTIFY)
+        assertEquals(dev.lelonio.square.backend.BackendId.YOUTUBE_MUSIC, app.preferences.backend.value)
     }
 
     @Test
@@ -106,19 +89,4 @@ class FusionDeviceTest {
         assertFalse(RefreshRates.isSupported(display, 1000))
     }
 
-    @Test
-    fun audioOutputAndCodecsAreReadWithoutPermission() {
-        LosslessOutput.init(context)
-        LosslessOutput.refresh()
-        val state = LosslessOutput.state.value
-        // Whatever the emulator has, an unknown Bluetooth codec is never counted.
-        if (state.bluetoothCodecUnknown) assertFalse(state.capable)
-        // The codec list answers, with or without a Dolby decoder.
-        assertNotNull(DeviceCodecs.atmosDecoders)
-    }
-
-    @Test
-    fun normalisationOffLeavesTheLevelAlone() {
-        assertEquals(1f, Normalization.levelFor("dQw4w9WgXcQ"), 0f)
-    }
 }

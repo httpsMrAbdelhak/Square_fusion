@@ -798,6 +798,9 @@ fun SquareApp(
     // Open when a name is being asked for; the playlist is null when the name is
     // for one that does not exist yet.
     var naming by remember { mutableStateOf<NamingRequest?>(null) }
+    // Square Fusion: the Library's "+" menu, and the link being imported.
+    var libraryAddMenu by remember { mutableStateOf(false) }
+    var importingLink by remember { mutableStateOf(false) }
 
     // Once, on the first composition that has a usable Web API session. The
     // ViewModel keeps what it fetched, so navigating away and back does not
@@ -1947,7 +1950,7 @@ fun SquareApp(
                                 playlistOrder = playlistOrder,
                                 pinned = pinnedPlaylists,
                                 canEdit = viewModel.canEditPlaylists,
-                                onCreatePlaylist = { naming = NamingRequest(null) },
+                                onCreatePlaylist = { libraryAddMenu = true },
                                 onPlaylistMenu = {
                                     // Whose it is, from the library's own index;
                                     // unknown is still offered, as before.
@@ -3442,6 +3445,17 @@ fun SquareApp(
                         // Pinning is about where a row sits in the library, so
                         // it is offered for what is in the library. A playlist
                         // you are only looking at has no row to move.
+                        // Square Fusion: a playlist imported from a Spotify link leaves the Library here.
+                        val importedId = dev.lelonio.square.fusion.spotify.SpotifyLibraryStore.playlistIdOf(shownPlaylist.uri)
+                            ?.takeIf { dev.lelonio.square.fusion.spotify.SpotifyLibraryStore.playlist(it)?.imported == true }
+                        if (importedId != null) TrackSheetAction(
+                            stringResource(R.string.remove_from_library),
+                            PhosphorIcons.Regular.Trash,
+                            destructive = true,
+                        ) {
+                            dev.lelonio.square.fusion.spotify.SpotifyLibraryStore.removeImported(importedId)
+                            playlistMenu = null
+                        }
                         if (playlistMenuSaved) TrackSheetAction(
                             stringResource(if (isPinned) R.string.unpin else R.string.pin),
                             PhosphorIcons.Regular.PushPin,
@@ -3611,6 +3625,55 @@ fun SquareApp(
                             viewModel.savePlaylist(name, description, public, cover)
                         },
                         onDismiss = viewModel::closeEditPlaylist,
+                    )
+                }
+
+                // Square Fusion: what the Library's "+" offers.
+                TrackSheet(
+                    visible = libraryAddMenu,
+                    title = stringResource(R.string.library),
+                    subtitle = "",
+                    artworkUrl = null,
+                    backdrop = overlayBackdrop,
+                    onDismiss = { libraryAddMenu = false },
+                ) {
+                    if (viewModel.canEditPlaylists) TrackSheetAction(
+                        stringResource(R.string.new_playlist),
+                        PhosphorIcons.Regular.Plus,
+                    ) {
+                        libraryAddMenu = false
+                        naming = NamingRequest(null)
+                    }
+                    TrackSheetAction(
+                        stringResource(R.string.fusion_import_playlist),
+                        PhosphorIcons.Regular.LinkSimple,
+                    ) {
+                        libraryAddMenu = false
+                        importingLink = true
+                    }
+                }
+
+                if (importingLink) {
+                    dev.lelonio.square.ui.components.NameDialog(
+                        title = stringResource(R.string.fusion_import_playlist),
+                        initial = "",
+                        confirmLabel = stringResource(R.string.fusion_import),
+                        placeholder = stringResource(R.string.fusion_import_hint),
+                        onConfirm = { link ->
+                            importingLink = false
+                            if (viewModel.importPlaylistLink(link)) {
+                                if (navController.currentDestination?.route != Routes.PLAYLIST) {
+                                    navController.navigate(Routes.PLAYLIST) { launchSingleTop = true }
+                                }
+                            } else {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    context.getString(R.string.fusion_import_bad_link),
+                                    android.widget.Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                        },
+                        onDismiss = { importingLink = false },
                     )
                 }
 

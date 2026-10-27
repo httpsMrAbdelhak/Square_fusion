@@ -402,7 +402,11 @@ fun LibraryScreen(
                                 playlist,
                                 pinned = playlist.uri in pinned,
                                 onClick = { open(playlist, artists, onOpenPlaylist, onOpenArtist) },
-                                onLongClick = if (canEdit) {
+                                // Square Fusion: an imported Spotify playlist has a menu too.
+                                onLongClick = if (canEdit || playlist.uri.startsWith(
+                                        dev.lelonio.square.fusion.spotify.SpotifyLibraryStore.PLAYLIST_PREFIX,
+                                    )
+                                ) {
                                     { onPlaylistMenu(playlist) }
                                 } else {
                                     null
@@ -461,7 +465,11 @@ fun LibraryScreen(
                                 playlist,
                                 pinned = playlist.uri in pinned,
                                 onClick = { open(playlist, artists, onOpenPlaylist, onOpenArtist) },
-                                onLongClick = if (canEdit) {
+                                // Square Fusion: an imported Spotify playlist has a menu too.
+                                onLongClick = if (canEdit || playlist.uri.startsWith(
+                                        dev.lelonio.square.fusion.spotify.SpotifyLibraryStore.PLAYLIST_PREFIX,
+                                    )
+                                ) {
                                     { onPlaylistMenu(playlist) }
                                 } else {
                                     null
@@ -594,10 +602,10 @@ private fun Header(
                 }
             }
 
-            // Only where a playlist can actually be made: on a source with no
-            // account signed in, a plus that always failed would be worse than
-            // no plus at all.
-            if (canEdit) {
+            // Square Fusion: always there, since importing a playlist from a
+            // link needs no account; making one is offered only where it can
+            // be done (see the menu it opens, in SquareApp).
+            run {
                 LiquidButton(
                     onClick = onCreatePlaylist,
                     backdrop = backdrop,

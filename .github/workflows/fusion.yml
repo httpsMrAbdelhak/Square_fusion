@@ -1,20 +1,31 @@
 name: Square Fusion APK
 
-# Every push to main builds, tests and publishes an installable APK.
+# Every push to main builds and tests an APK, runs it on an emulator, and
+# only then publishes it. Pushes to other branches stop after the tests.
 #
 # The APK lands in two places:
 #  - the workflow run's artifacts (needs a GitHub login to download), and
 #  - a GitHub pre-release named after the build, plus the rolling "latest"
-#    release, whose assets are plain links a phone can open directly.
+#    release, whose assets are plain links a phone can open directly and
+#    which the app's own updater reads.
+#
+# A build signed with a different key than the published one could not be
+# installed over it, so publishing stops in that case unless the run is
+# started by hand with allow_new_signature.
 #
 # Signing: with the four SIGNING_* secrets set, the release key from those
 # secrets. Without them, a debug key kept in the Actions cache so successive
 # builds share it and install over one another. See docs/FUSION.md.
 on:
   push:
-    branches: [main]
+    branches: [main, cleanup]
   pull_request:
   workflow_dispatch:
+    inputs:
+      allow_new_signature:
+        description: Publish even if the signing key differs from the published APK's (the update will need an uninstall)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -31,6 +42,10 @@ jobs:
     outputs:
       version: ${{ steps.id.outputs.version }}
       build: ${{ steps.id.outputs.build }}
+      sha: ${{ steps.id.outputs.sha }}
+      short: ${{ steps.id.outputs.short }}
+      same_key: ${{ steps.sig.outputs.same }}
+      signed_with: ${{ steps.signed.outputs.with }}
     steps:
       - uses: actions/checkout@v4
 
@@ -42,7 +57,10 @@ jobs:
           echo "build=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "short=$(git rev-parse --short=10 HEAD)" >> "$GITHUB_OUTPUT"
-          echo "version=2.6.3-fusion.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          # Upstream Square's version, as app/build.gradle.kts states it.
+          upstream=$(sed -n 's/^ *versionName = "\([0-9.]*\)"$/\1/p' app/build.gradle.kts | head -n 1)
+          test -n "$upstream"
+          echo "version=$upstream-fusion.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
       # The fallback key, shared between runs through the cache so an APK
       # from one build installs over the one before it.
@@ -78,6 +96,10 @@ jobs:
             fi
             echo "SIGNED_WITH=CI fallback key (no signing secrets set)" >> "$GITHUB_ENV"
           fi
+
+      - name: Record signing
+        id: signed
+        run: echo "with=$SIGNED_WITH" >> "$GITHUB_OUTPUT"
 
       - name: Unit tests
         run: |
@@ -158,6 +180,31 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # The published APK and this one must share a signing key, or this one
+      # cannot be installed over it. Compared on the certificate digest.
+      - name: Signature continuity
+        id: sig
+        run: |
+          set -uo pipefail
+          bt="$ANDROID_HOME/build-tools/36.0.0"
+          digest() { "$bt/apksigner" verify --print-certs "$1" | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1; }
+          new=$(digest square-fusion.apk)
+          if curl -fsSL -o "$RUNNER_TEMP/published.apk" "${{ github.server_url }}/${{ github.repository }}/releases/latest/download/square-fusion.apk"; then
+            old=$(digest "$RUNNER_TEMP/published.apk")
+          else
+            old=""
+          fi
+          echo "new $new"
+          echo "published ${old:-none}"
+          if [ -z "$old" ] || [ "$old" = "$new" ]; then
+            echo "same=true" >> "$GITHUB_OUTPUT"
+            echo "- Signing key: same as the published APK" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "same=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Signing key changed::This APK is not signed with the published APK's key ($old). It cannot be installed over it; publishing is held back unless allow_new_signature is set."
+            echo "- Signing key: **different from the published APK**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: square-fusion-${{ steps.id.outputs.version }}-${{ steps.id.outputs.short }}
@@ -166,26 +213,6 @@ jobs:
             SHA256SUMS.txt
           retention-days: 30
           if-no-files-found: error
-
-      - name: Publish release
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          tag="fusion-${{ steps.id.outputs.build }}"
-          notes="Square Fusion ${{ steps.id.outputs.version }}
-          Built from commit ${{ steps.id.outputs.sha }} by run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          Signed with: $SIGNED_WITH
-          Install square-fusion.apk (universal) or the file for your phone's ABI. It installs beside Square and does not replace it."
-          gh release create "$tag" square-fusion*.apk SHA256SUMS.txt \
-            --target "${{ steps.id.outputs.sha }}" --prerelease \
-            --title "Square Fusion ${{ steps.id.outputs.version }}" --notes "$notes"
-          # The rolling release whose asset URL never changes.
-          gh release delete latest --yes --cleanup-tag || true
-          gh release create latest square-fusion.apk SHA256SUMS.txt \
-            --target "${{ steps.id.outputs.sha }}" --latest \
-            --title "Square Fusion (latest: ${{ steps.id.outputs.version }})" --notes "$notes"
 
       - name: Upload reports on failure
         if: failure()
@@ -197,9 +224,10 @@ jobs:
             app/build/test-results/
           if-no-files-found: ignore
 
-  # Installs the APK on an emulator and checks launch, intents, links, icon
-  # aliases, background/resume and screen off/on. Does not block the release:
-  # its result and screenshots are attached to it.
+  # Installs the APK on an emulator: launch, intents, links, icon aliases,
+  # Square Fusion's instrumented tests, then the Spotify import and direct
+  # playback (scripts/fusion-playback.sh). A FAIL there holds the release
+  # back; what the network refuses (YouTube, Spotify) is a WARN in the log.
   smoke:
     needs: apk
     runs-on: ubuntu-latest
@@ -233,20 +261,7 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash -c 'set -o pipefail; bash scripts/fusion-smoke.sh "$(ls square-fusion-*-universal.apk | head -n 1)" 2>&1 | tee smoke-log.txt; s1=$?; bash scripts/fusion-instrumented.sh instrumented 2>&1 | tee instrumented-log.txt; s2=$?; (python3 scripts/fake-addon.py > /dev/null 2>&1 &) ; sleep 2; bash scripts/fusion-playback.sh 2>&1 | tee playback-log.txt; s3=$?; kill "$(cat fake-addon.pid)" 2>/dev/null; [ $s1 = 0 ] && [ $s2 = 0 ] && [ $s3 = 0 ]'
-
-      - name: Attach results to the release
-        if: always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          [ -f smoke-log.txt ] && cp smoke-log.txt smoke/ 2>/dev/null || true
-          if [ -d smoke ]; then
-            zip -qr smoke-results.zip smoke smoke-log.txt instrumented-log.txt playback playback-log.txt fake-addon.log || true
-            gh release upload "fusion-${{ needs.apk.outputs.build }}" smoke-results.zip smoke-log.txt --clobber || true
-            [ -f instrumented-log.txt ] && gh release upload "fusion-${{ needs.apk.outputs.build }}" instrumented-log.txt --clobber || true
-            [ -f playback-log.txt ] && gh release upload "fusion-${{ needs.apk.outputs.build }}" playback-log.txt --clobber || true
-          fi
+          script: bash -c 'set -o pipefail; bash scripts/fusion-smoke.sh "$(ls square-fusion-*-universal.apk | head -n 1)" 2>&1 | tee smoke-log.txt; s1=$?; bash scripts/fusion-instrumented.sh instrumented 2>&1 | tee instrumented-log.txt; s2=$?; bash scripts/fusion-playback.sh 2>&1 | tee playback-log.txt; s3=$?; [ $s1 = 0 ] && [ $s2 = 0 ] && [ $s3 = 0 ]'
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -258,5 +273,47 @@ jobs:
             instrumented-log.txt
             playback/
             playback-log.txt
-            fake-addon.log
           if-no-files-found: ignore
+
+  # Publishes only what built, passed the emulator and keeps the signing key.
+  publish:
+    needs: [apk, smoke]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && (needs.apk.outputs.same_key == 'true' || inputs.allow_new_signature)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: square-fusion-*
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: smoke-${{ needs.apk.outputs.version }}
+          path: results
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.apk.outputs.version }}
+          SHA: ${{ needs.apk.outputs.sha }}
+          SIGNED_WITH: ${{ needs.apk.outputs.signed_with }}
+        run: |
+          set -euo pipefail
+          tag="fusion-${{ needs.apk.outputs.build }}"
+          notes="Square Fusion $VERSION
+          Built from commit $SHA by run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Signed with: $SIGNED_WITH
+          Install square-fusion.apk (universal) or the file for your phone's ABI. It installs beside Square and does not replace it."
+          (cd results && zip -qr ../test-results.zip .) || true
+          extra=""
+          [ -f test-results.zip ] && extra="test-results.zip"
+          gh release create "$tag" square-fusion*.apk SHA256SUMS.txt $extra \
+            --target "$SHA" --prerelease \
+            --title "Square Fusion $VERSION" --notes "$notes"
+          # The rolling release whose asset URLs never change; the app's
+          # updater reads its title for the version and picks its ABI's APK.
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest square-fusion*.apk SHA256SUMS.txt \
+            --target "$SHA" --latest \
+            --title "Square Fusion (latest: $VERSION)" --notes "$notes"

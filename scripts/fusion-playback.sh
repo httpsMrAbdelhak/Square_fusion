@@ -1,14 +1,17 @@
 #!/bin/bash
-# Real playback on the emulator, against the debug build left installed by
-# fusion-instrumented.sh (debuggable, so its preferences can be seeded).
-#   1. YouTube Music as in Square: play, background, screen off, media keys,
-#      notification, media session.
-#   2. With a local test addon (scripts/fake-addon.py on the host, reached as
-#      10.0.2.2): the song must come from the addon, and YouTube is the
-#      fallback when the addon is switched off.
-# Every step dumps the screen to playback/ so a failure can be read.
+# Spotify playlist import and direct playback on the emulator, against the
+# debug build left installed by fusion-instrumented.sh:
+#   1. first launch offers YouTube Music only;
+#   2. Library > + > Import a playlist > public Spotify link > Import;
+#   3. Play: the first song is matched on YouTube Music and played, then the
+#      next one, in the playlist's order;
+#   4. background, screen off, media keys and notification, when it plays.
+# YouTube refuses anonymous streams to some data-centre networks, and Spotify
+# may refuse them too: those refusals are reported as WARN, not hidden, and
+# the log says which step stopped. Every step dumps the screen to playback/.
 set -u
 PKG=dev.lelonio.square.fusion
+LINK="${SPOTIFY_TEST_PLAYLIST:-https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M}"
 OUT=playback
 mkdir -p "$OUT"
 fail=0
@@ -16,9 +19,20 @@ n=0
 step() { echo "== $*"; }
 shot() { n=$((n + 1)); adb exec-out screencap -p > "$OUT/$(printf %02d $n)-$1.png" 2>/dev/null || true; }
 dump() { adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1; adb pull /sdcard/ui.xml "$OUT/$1.xml" > /dev/null 2>&1; }
+alive() { adb shell pidof "$PKG" > /dev/null; }
+wait_log() {
+  # $1: regex, $2: seconds. Prints the first matching line.
+  local i line
+  for i in $(seq 1 "$2"); do
+    line=$(adb logcat -d -s 'SquareFusion:*' 'SquareUi:*' 2>/dev/null | grep -E "$1" | head -n 1)
+    [ -n "$line" ] && { echo "$line"; return 0; }
+    sleep 1
+  done
+  return 1
+}
 
 # Taps the centre of the first node matching a Python expression over
-# (text, desc, clickable, x1, y1, x2, y2). Returns 1 when nothing matched.
+# (text, desc, clickable, cls, x1, y1, x2, y2). Returns 1 when nothing matched.
 tap_where() {
   dump "$1"
   local b
@@ -31,6 +45,7 @@ for m in re.finditer(r'<node [^>]*>', xml):
     text = re.search(r'text="([^"]*)"', n).group(1)
     desc = re.search(r'content-desc="([^"]*)"', n).group(1)
     clickable = 'clickable="true"' in n
+    cls = re.search(r'class="([^"]*)"', n).group(1)
     x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n).groups())
     if eval(rule):
         print((x1 + x2) // 2, (y1 + y2) // 2)
@@ -71,131 +86,134 @@ expect_state() {
   return 1
 }
 
-start_playing() {
-  adb shell am force-stop "$PKG"
-  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
-  sleep 12
-  # Fresh install: the onboarding asks for the source.
-  tap_where onboarding 'text == "YouTube Music"' && sleep 15
-  shot home
-  # The first cover under the first shelf heading of the home page.
-  tap_where home 'clickable and y1 > 380 and (x2 - x1) > 80 and (y2 - y1) > 80' || tap_where home2 'clickable and y1 > 300 and (y2 - y1) > 60'
-  sleep 10
-  shot list
-  # A play button by its label, or else the first row of the list.
-  tap_where list '(desc.lower() in ("play", "shuffle", "lecture") or text.lower() in ("play", "shuffle")) and clickable' \
-    || tap_where list2 'desc.lower() in ("play", "shuffle", "lecture") or text.lower() in ("play", "shuffle")' \
-    || tap_where list3 'clickable and y1 > 330 and (x2 - x1) > 200'
-  sleep 5
+
+session_state() {
+  # PlaybackState of this app's media session: 3 playing, 2 paused, 6 buffering.
+  adb shell dumpsys media_session | python3 -c "
+import re, sys
+text = sys.stdin.read()
+blocks = text.split('package=')
+for b in blocks[1:]:
+    if b.startswith('$PKG'):
+        m = re.search(r'state=PlaybackState \{state=(\d+)', b)
+        d = re.search(r'description=([^\n]*)', b)
+        print((m.group(1) if m else '?') + ' | ' + (d.group(1).strip() if d else ''))
+        break
+else:
+    print('none |')
+"
 }
 
-seed_sources() {
-  # $1: true or false — the test addon enabled or not.
-  adb shell am force-stop "$PKG"
-  cat > "$OUT/square_fusion_sources.xml" <<XML
-<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
-<map>
-    <string name="sources">[{&quot;id&quot;:&quot;test-addon&quot;,&quot;kind&quot;:&quot;ADDON&quot;,&quot;baseUrl&quot;:&quot;http://10.0.2.2:8765&quot;,&quot;label&quot;:&quot;Fusion test addon&quot;,&quot;enabled&quot;:$1,&quot;allowDownloads&quot;:true,&quot;requiresLosslessOutput&quot;:false}]</string>
-</map>
-XML
-  adb push "$OUT/square_fusion_sources.xml" /data/local/tmp/sources.xml > /dev/null
-  adb shell chmod 644 /data/local/tmp/sources.xml
-  # One string for the device's shell, so run-as gets the whole command.
-  adb shell "run-as $PKG sh -c 'mkdir -p shared_prefs && cp /data/local/tmp/sources.xml shared_prefs/square_fusion_sources.xml'"
-  adb shell "run-as $PKG cat shared_prefs/square_fusion_sources.xml" | grep -q "test-addon" \
-    && echo "   sources seeded (enabled=$1)" || { echo "FAIL could not seed the sources"; fail=1; }
+wait_state() {
+  local want="$1" i s
+  for i in $(seq 1 20); do
+    s=$(session_state)
+    case "$s" in "$want"*) echo "$s"; return 0;; esac
+    sleep 2
+  done
+  echo "$s"
+  return 1
 }
 
-tones() { grep -c "GET /tone.wav" fake-addon.log 2>/dev/null || echo 0; }
-
-# YouTube refuses anonymous streams to some networks (data centres among
-# them: "This song plays only when signed in"), so the playback checks run on
-# the addon's stream, which the app resolves before asking YouTube.
-
-# ── 1. Playback from the addon ──────────────────────────────────────────────
-step "play with the test addon enabled"
-seed_sources true
-adb logcat -c
-start_playing
-expect_state 3 "playing" && playing=1 || playing=0
-sleep 5
-shot playing
-adb logcat -d | grep -E "SquareFusion" | tail -n 40 > "$OUT/addon-logcat.txt"
-if grep -q "Fusion test addon: WAV" "$OUT/addon-logcat.txt" && [ "$(tones)" -gt 0 ]; then
-  echo "OK   the song came from the addon ($(tones) requests for tone.wav)"
-else
-  echo "FAIL the addon was not used"; fail=1
-  cat "$OUT/addon-logcat.txt"
-fi
-
-grep -E "decoder input|mixer input" "$OUT/addon-logcat.txt" | tail -n 3 | sed 's/^.*SquareFusion: /     /'
-if grep -q "decoder input: audio/raw 44100 Hz 2 ch 16 bit" "$OUT/addon-logcat.txt"; then
-  echo "OK   decoded format matches what the addon announced (WAV 16-bit 44.1 kHz)"
-else
-  echo "WARN decoded format not confirmed in the log"
-fi
-
-if [ "$playing" = 1 ]; then
-  step "notification"
-  if adb shell dumpsys notification --noredact | grep -A60 "pkg=$PKG" | grep -qiE "MediaStyle|mediaSession|category=transport|template=android.app.Notification\$MediaStyle"; then
-    echo "OK   media notification posted"
-  else
-    echo "FAIL no media notification"; fail=1
-    adb shell dumpsys notification --noredact | grep -A30 "pkg=$PKG" | head -n 40
-  fi
-
-  step "background"
-  adb shell input keyevent KEYCODE_HOME
-  sleep 10
-  expect_state 3 "playing in background"
-
-  step "screen off"
-  adb shell input keyevent KEYCODE_SLEEP
-  sleep 20
-  expect_state 3 "playing with the screen off"
-  adb shell input keyevent KEYCODE_WAKEUP
-  sleep 2
-  shot lockscreen
-
-  step "media keys (headsets, the lock screen and the notification act on this same session)"
-  adb shell input keyevent KEYCODE_MEDIA_PAUSE
-  expect_state 2 "paused by media key"
-  adb shell input keyevent KEYCODE_MEDIA_PLAY
-  expect_state 3 "resumed by media key"
-  before=$(session_state)
-  adb shell input keyevent KEYCODE_MEDIA_NEXT
-  sleep 10
-  after=$(session_state)
-  if [ "${before#*|}" != "${after#*|}" ]; then echo "OK   next track: ${after#*|}"; else echo "WARN next track: same description (${after#*|})"; fi
-  expect_state 3 "playing after next"
-  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
-  sleep 3
-  shot back-in-app
-fi
-
-# ── 2. Addon switched off: YouTube, as in Square ────────────────────────────
-step "addon switched off"
-before_tones=$(tones)
-seed_sources false
+# ── 1. First launch ─────────────────────────────────────────────────────────
+step "first launch"
+adb shell pm clear "$PKG" > /dev/null
 adb logcat -c
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
-sleep 8
-adb shell input keyevent KEYCODE_MEDIA_PLAY
-sleep 20
-shot youtube
-adb logcat -d | grep -E "Square" | tail -n 80 > "$OUT/youtube-logcat.txt"
-if [ "$(tones)" = "$before_tones" ]; then
-  echo "OK   the disabled addon was not asked; the song went to YouTube"
+sleep 12
+dump onboarding
+shot onboarding
+if grep -q 'text="Spotify"' "$OUT/onboarding.xml"; then
+  echo "FAIL the first launch still offers Spotify"; fail=1
 else
-  echo "FAIL the disabled addon was still used"; fail=1
+  echo "OK   no Spotify choice on the first launch"
 fi
-s=$(session_state)
-case "$s" in
-  3*) echo "OK   YouTube playback: ${s}" ;;
-  *) echo "WARN YouTube did not play here (${s}); see youtube-logcat.txt — YouTube refuses anonymous streams to data-centre networks" ;;
-esac
-if adb shell pidof "$PKG" > /dev/null; then echo "OK   app still running"; else echo "FAIL app stopped"; fail=1; fi
+tap_where onboarding 'text == "YouTube Music"' || echo "WARN no YouTube Music card (onboarding already done?)"
+sleep 12
+dump home
+if grep -qE 'ArrowsLeftRight|text="YouTube Music · ' "$OUT/home.xml"; then
+  echo "FAIL a source switcher is still on the home page"; fail=1
+else
+  echo "OK   no source switcher on the home page"
+fi
+shot home
 
-adb logcat -d | grep -E "SquareFusion|AndroidRuntime|FATAL" | tail -n 120 > "$OUT/logcat.txt" || true
+# ── 2. Import ───────────────────────────────────────────────────────────────
+step "import $LINK"
+tap_where tabs '(text == "Library" or desc == "Library") and y1 > 1200' \
+  || tap_where tabs2 'text == "Library" or desc == "Library"' \
+  || { echo "FAIL no Library tab"; fail=1; }
+sleep 4
+tap_where library 'desc == "New playlist"' || { echo "FAIL no + in the Library"; fail=1; }
+sleep 3
+shot add-menu
+tap_where menu 'text == "Import a playlist"' || { echo "FAIL no Import a playlist entry"; fail=1; }
+sleep 3
+tap_where dialog '"EditText" in cls' || echo "WARN no text field found; typing into the focused one"
+adb shell input text "'$LINK'"
+sleep 1
+shot dialog
+adb logcat -c
+tap_where dialog2 'text == "Import"' || { echo "FAIL no Import button"; fail=1; }
+result=$(wait_log "imported playlist|spotify import failed" 90)
+shot imported
+imported=0
+case "$result" in
+  *"imported playlist"*) echo "OK   ${result#*: }"; imported=1 ;;
+  *"import failed"*) echo "WARN Spotify refused the import here: ${result#*: }" ;;
+  *) echo "FAIL the import neither finished nor failed in 90 s"; fail=1 ;;
+esac
+alive || { echo "FAIL app stopped during the import"; fail=1; }
+
+# ── 3. Direct playback ──────────────────────────────────────────────────────
+if [ "$imported" = 1 ]; then
+  step "play the imported playlist"
+  sleep 6
+  dump playlist
+  shot playlist
+  adb logcat -c
+  tap_where playlist '(desc.lower() in ("play", "shuffle") or text.lower() in ("play", "shuffle")) and clickable' \
+    || tap_where playlist2 'desc.lower() in ("play", "shuffle") or text.lower() in ("play", "shuffle")' \
+    || { echo "FAIL no Play button on the imported playlist"; fail=1; }
+  m=$(wait_log "match [A-Za-z0-9]+ " 60)
+  case "$m" in
+    *"->"*) echo "OK   matched on YouTube Music: ${m#*: match }" ;;
+    *"none close enough"*) echo "WARN first song not found on YouTube Music: ${m#*: match }" ;;
+    *) echo "WARN no match attempt logged in 60 s (YouTube Music search unreachable?)" ;;
+  esac
+  if s=$(wait_state 3); then
+    echo "OK   playing: ${s#*|}"
+    shot playing
+    step "next song keeps the playlist's order"
+    adb logcat -c
+    adb shell input keyevent KEYCODE_MEDIA_NEXT
+    m2=$(wait_log "match [A-Za-z0-9]+ " 40)
+    echo "     ${m2#*: }"
+    s2=$(wait_state 3) && echo "OK   next: ${s2#*|}" || echo "WARN next song did not play: ${s2}"
+    step "background and screen off"
+    adb shell input keyevent KEYCODE_HOME
+    sleep 10
+    s=$(wait_state 3) && echo "OK   playing in background" || { echo "FAIL stopped in background: $s"; fail=1; }
+    adb shell input keyevent KEYCODE_SLEEP
+    sleep 20
+    s=$(wait_state 3) && echo "OK   playing with the screen off" || { echo "FAIL stopped with the screen off: $s"; fail=1; }
+    adb shell input keyevent KEYCODE_WAKEUP
+    adb shell input keyevent KEYCODE_MEDIA_PAUSE
+    s=$(wait_state 2) && echo "OK   paused by media key" || { echo "FAIL media pause: $s"; fail=1; }
+    adb shell input keyevent KEYCODE_MEDIA_PLAY
+    s=$(wait_state 3) && echo "OK   resumed by media key" || { echo "FAIL media play: $s"; fail=1; }
+    if adb shell dumpsys notification --noredact | grep -A60 "pkg=$PKG" | grep -qiE "MediaStyle|mediaSession|category=transport"; then
+      echo "OK   media notification posted"
+    else
+      echo "FAIL no media notification"; fail=1
+    fi
+  else
+    echo "WARN not playing here (${s}); see logcat.txt. YouTube refuses anonymous streams to data-centre networks."
+  fi
+  adb logcat -d | grep -E "SquareYTQuality" | tail -n 3 | sed 's/^/     /'
+fi
+
+alive && echo "OK   app still running" || { echo "FAIL app stopped"; fail=1; }
+adb logcat -d | grep -E "SquareFusion|SquareYTQuality|SquareUi|AndroidRuntime|FATAL" | tail -n 200 > "$OUT/logcat.txt" || true
 echo "playback result: $([ $fail = 0 ] && echo PASS || echo FAIL)"
 exit $fail

@@ -81,9 +81,9 @@ class Updater(context: Context) {
      * button is pressed and at no other time.
      */
     suspend fun check() {
-        // Square Fusion installs beside Square under its own application id.
-        // The official releases carry Square's id, so offering them here would
-        // install or replace the original app rather than update this one.
+        // Square Fusion updates from its own releases ([UPDATE_REPO]), never from
+        // Square's: those carry Square's id and signature, and would install the
+        // original app beside this one rather than update it.
         if (!BuildConfig.SELF_UPDATE) {
             _state.value = State.Idle
             return
@@ -135,7 +135,7 @@ class Updater(context: Context) {
 
     private fun latestRelease(): Release? {
         val request = Request.Builder()
-            .url("https://api.github.com/repos/$REPO/releases/latest")
+            .url("https://api.github.com/repos/$UPDATE_REPO/releases/latest")
             .header("Accept", "application/vnd.github+json")
             .build()
 
@@ -143,7 +143,10 @@ class Updater(context: Context) {
             if (!response.isSuccessful) error("HTTP ${response.code}")
             val body = json.parseToJsonElement(response.body?.string().orEmpty()) as? JsonObject
                 ?: return null
-            val tag = body["tag_name"]?.jsonPrimitive?.content?.removePrefix("v") ?: return null
+            // Square Fusion's rolling release is tagged "latest" and names its
+            // version ("…2.6.3-fusion.14…") in its title.
+            val tag = (body["name"]?.jsonPrimitive?.content ?: body["tag_name"]?.jsonPrimitive?.content)
+                ?.let { VERSION.find(it)?.value } ?: return null
             val apks = (body["assets"] as? JsonArray)
                 ?.filterIsInstance<JsonObject>()
                 ?.filter { it["name"]?.jsonPrimitive?.content?.endsWith(".apk") == true }
@@ -309,7 +312,13 @@ class Updater(context: Context) {
     companion object {
         private const val TAG = "Updater"
 
+        /** Square's own repository: still where its Spotify query keys are read from; see PathfinderKeys. */
         const val REPO = "Lelonio/Square"
+
+        /** Where Square Fusion's builds are published, and so where its updates come from. */
+        const val UPDATE_REPO = "httpsMrAbdelhak/Square_fusion"
+
+        private val VERSION = Regex("""\d+(?:\.\d+)+(?:-fusion\.\d+)?""")
 
         /** Told apart from a network failure so the UI can offer the way out. */
         const val REASON_PERMISSION = "permission"

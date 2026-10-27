@@ -1,0 +1,138 @@
+name: Upstream sync
+
+# Follows Lelonio/Square: once a day (and on demand) merges its master into
+# this fork's main, runs the unit tests, pushes, and starts the APK workflow,
+# which builds, tests on an emulator and publishes.
+#
+# It never forces anything through:
+#  - a merge conflict is aborted and reported in an issue, listing the files,
+#    and nothing is pushed or published until someone resolves it;
+#  - failing unit tests after a clean merge are reported the same way;
+#  - an upstream change to .github/workflows cannot be pushed with the
+#    workflow's own token (GitHub forbids it), so that is reported too.
+# Nothing is ever pushed to Lelonio/Square.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: https://github.com/Lelonio/Square.git
+  UPSTREAM_BRANCH: master
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      # Touching the fallback signing key keeps it in the Actions cache,
+      # which drops entries unused for seven days. Losing it would sign the
+      # next APK with a new key, which cannot be installed over the last one.
+      - name: Keep the fallback signing key cached
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: fusion-debug-keystore-v1
+
+      - name: Fetch upstream
+        id: fetch
+        run: |
+          set -euo pipefail
+          git remote add upstream "$UPSTREAM"
+          git fetch --no-tags upstream "$UPSTREAM_BRANCH"
+          new=$(git rev-list --count HEAD..FETCH_HEAD)
+          echo "upstream=$(git rev-parse FETCH_HEAD)" >> "$GITHUB_OUTPUT"
+          echo "new=$new" >> "$GITHUB_OUTPUT"
+          echo "Upstream commits not in main: $new"
+          git log --oneline HEAD..FETCH_HEAD | head -n 50
+
+      - name: Merge
+        id: merge
+        if: steps.fetch.outputs.new != '0'
+        run: |
+          set -uo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git merge --no-ff --no-edit -m "Merge upstream Square ${{ steps.fetch.outputs.upstream }}" "${{ steps.fetch.outputs.upstream }}"; then
+            echo "result=merged" >> "$GITHUB_OUTPUT"
+            if git diff --name-only HEAD^1 HEAD | grep -q '^\.github/workflows/'; then
+              echo "result=workflows" >> "$GITHUB_OUTPUT"
+              git diff --name-only HEAD^1 HEAD | grep '^\.github/workflows/' > "$RUNNER_TEMP/files.txt"
+            fi
+          else
+            git diff --name-only --diff-filter=U > "$RUNNER_TEMP/files.txt"
+            git merge --abort
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: ./.github/actions/setup
+        if: steps.merge.outputs.result == 'merged'
+
+      - name: Unit tests
+        id: tests
+        if: steps.merge.outputs.result == 'merged'
+        run: |
+          set -o pipefail
+          if ./gradlew :app:testDevUnitTest --stacktrace 2>&1 | tee "$RUNNER_TEMP/tests.log"; then
+            echo "result=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=failed" >> "$GITHUB_OUTPUT"
+            { grep -E "^e: |FAILED|What went wrong" "$RUNNER_TEMP/tests.log" | head -n 60; } > "$RUNNER_TEMP/files.txt" || true
+          fi
+
+      - name: Push and build
+        if: steps.tests.outputs.result == 'passed'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git push origin HEAD:main
+          # A push made with this token does not start other workflows;
+          # starting one explicitly does.
+          gh workflow run fusion.yml --ref main
+          echo "Merged upstream ${{ steps.fetch.outputs.upstream }}; APK build started." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report
+        if: steps.merge.outputs.result == 'conflict' || steps.merge.outputs.result == 'workflows' || steps.tests.outputs.result == 'failed'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ steps.merge.outputs.result == 'merged' && 'tests' || steps.merge.outputs.result }}
+        run: |
+          set -euo pipefail
+          case "$RESULT" in
+            conflict)  title="Upstream sync: merge conflict"; why="Merging upstream Square into main conflicts in these files. Nothing was pushed or published." ;;
+            workflows) title="Upstream sync: workflow files changed"; why="Upstream changed workflow files, which this workflow's token may not push. Merge by hand. Nothing was pushed or published." ;;
+            *)         title="Upstream sync: unit tests fail after the merge"; why="The merge was clean but the unit tests fail. Nothing was pushed or published." ;;
+          esac
+          body="$why
+
+          Upstream commit: https://github.com/Lelonio/Square/commit/${{ steps.fetch.outputs.upstream }}
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          \`\`\`
+          $(cat "$RUNNER_TEMP/files.txt" 2>/dev/null)
+          \`\`\`
+
+          To resolve: \`git fetch https://github.com/Lelonio/Square.git master && git merge FETCH_HEAD\` on main, fix, push."
+          existing=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
+          echo "::error title=$title::$why"
+          exit 1

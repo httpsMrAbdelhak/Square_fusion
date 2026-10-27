@@ -52,22 +52,9 @@ android {
         // cpal's Android host is AAudio, which the ndk crate gates at API 26.
         minSdk = 26
         targetSdk = 35
-        // Square's own version, with the CI run that built it: every APK
-        // names the build it came from, and each one installs over the last.
-        val fusionBuild = (project.findProperty("fusionBuild") as String?)?.toIntOrNull() ?: 0
-        versionCode = 60_000 + fusionBuild
-        versionName = "2.6.3-fusion.$fusionBuild"
-        buildConfigField(
-            "String", "SOURCE_COMMIT",
-            "\"${(project.findProperty("sourceCommit") as String?) ?: "local"}\"",
-        )
+        versionCode = 60
+        versionName = "2.6.3"
         buildConfigField("boolean", "VERBOSE_LOG", "false")
-        // Square Fusion's instrumented tests (app/src/androidTest), run on an
-        // emulator by the CI against the debug build.
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // Square's updater installs Square's own releases, which carry the
-        // original application id; see Updater.check.
-        buildConfigField("boolean", "SELF_UPDATE", "false")
 
         // Bungee only for the ABIs that ship; see the splits below.
         externalNativeBuild {
@@ -392,3 +379,30 @@ tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders"
 // happened before any of the native build tasks run.
 tasks.matching { it.name.startsWith("configureCMake") || it.name.startsWith("buildCMake") }
     .configureEach { dependsOn(fetchBungee) }
+
+/**
+ * Square Fusion's own build settings, kept apart from Square's so that the
+ * upstream sync (.github/workflows/upstream-sync.yml) merges Square's version
+ * bumps without a conflict: the version Square sets above is read here and
+ * extended, never edited.
+ *
+ * versionName: Square's, then "-fusion.N", N being the CI run.
+ * versionCode: Square's times 10 000 plus N, so every build installs over the
+ *   one before it, and a new Square version over every build of the last.
+ */
+android {
+    defaultConfig {
+        val fusionBuild = (project.findProperty("fusionBuild") as String?)?.toIntOrNull() ?: 0
+        versionCode = (versionCode ?: 0) * 10_000 + fusionBuild
+        versionName = "$versionName-fusion.$fusionBuild"
+        buildConfigField(
+            "String", "SOURCE_COMMIT",
+            "\"${(project.findProperty("sourceCommit") as String?) ?: "local"}\"",
+        )
+        // Square Fusion's instrumented tests (app/src/androidTest), run on an
+        // emulator by the CI against the debug build.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Updates come from Square Fusion's own releases; see Updater.
+        buildConfigField("boolean", "SELF_UPDATE", "true")
+    }
+}

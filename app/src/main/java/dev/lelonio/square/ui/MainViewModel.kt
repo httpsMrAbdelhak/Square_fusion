@@ -3070,6 +3070,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * Square Fusion: Library › + › Import a playlist. A Spotify playlist link
+     * is imported and opened (loading, then its songs or a short error); a
+     * YouTube Music playlist link opens that playlist, which can be saved as
+     * any other. False for anything else, so the caller can say so.
+     */
+    fun importPlaylistLink(link: String): Boolean {
+        if (dev.lelonio.square.fusion.spotify.SpotifyLinks.playlistId(link) != null) {
+            openLink(link)
+            return true
+        }
+        val youtube = Regex("""(?:youtube\.com|youtu\.be)/.*[?&]list=([A-Za-z0-9_-]+)""").find(link.trim())
+            ?.groupValues?.get(1)
+        if (youtube != null) {
+            openContext(dev.lelonio.square.backend.youtube.YouTubeBackend.PLAYLIST_PREFIX + youtube, "")
+            return true
+        }
+        return false
+    }
+
+    /**
      * Square Fusion: a shared Spotify song, as a row that plays through YouTube
      * Music (matched when it loads), from the public page's own description.
      */

@@ -116,6 +116,7 @@ object SpotifyLibraryStore {
                 _state.value = _state.value.copy(playlists = others + (kept ?: playlist))
                 remember(id, songs)
             }
+            FusionLog.i("imported playlist $id \"${info.name}\": ${songs.size} songs")
             playlist
         }
     }

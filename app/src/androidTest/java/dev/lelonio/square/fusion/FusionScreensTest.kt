@@ -15,12 +15,8 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.lelonio.square.R
-import dev.lelonio.square.fusion.sources.SourceKind
 import dev.lelonio.square.ui.glass.backdrop.backdrops.emptyBackdrop
 import dev.lelonio.square.ui.settings.AppIconSection
-import dev.lelonio.square.ui.settings.FusionQualitySection
-import dev.lelonio.square.ui.settings.FusionSourcesPage
-import dev.lelonio.square.ui.settings.FusionStreamInfoPage
 import dev.lelonio.square.ui.settings.PerformanceSection
 import dev.lelonio.square.ui.settings.SpotifyFreeSection
 import dev.lelonio.square.ui.theme.SquareTheme
@@ -48,47 +44,9 @@ class FusionScreensTest {
         SquareTheme { Column(Modifier.verticalScroll(rememberScrollState())) { content() } }
     }
 
-    @Test
-    fun sourcesPageAddsJioSaavnSwitchedOffAndRemovesIt() {
-        compose.setContent {
-            SquareTheme { FusionSourcesPage(PaddingValues(), header = { Text("Sources") }) }
-        }
-        compose.onNodeWithText(s(R.string.fusion_add_addon), ignoreCase = true).assertExists()
-        compose.onNodeWithText(s(R.string.fusion_no_sources)).assertExists()
-        compose.onNode(androidx.compose.ui.test.hasTestTag("fusion-sources-list")).performScrollToNode(hasText(s(R.string.fusion_jiosaavn_add)))
-        compose.onNodeWithText(s(R.string.fusion_jiosaavn_add)).performClick()
-        compose.waitForIdle()
-        val saavn = Fusion.registry.configs.value.single { it.kind == SourceKind.JIOSAAVN }
-        assertFalse("JioSaavn is added switched off", saavn.enabled)
-        Fusion.registry.remove(saavn.id)
-        compose.waitForIdle()
-        assertTrue(Fusion.registry.configs.value.none { it.kind == SourceKind.JIOSAAVN })
-    }
-
-    @Test
-    fun streamInfoSaysUnknownWhenNothingPlays() {
-        compose.setContent {
-            SquareTheme { FusionStreamInfoPage(PaddingValues(), header = { Text("Info") }) }
-        }
-        compose.onNodeWithText(s(R.string.fusion_announced), ignoreCase = true).assertExists()
-        compose.onAllNodesWithTextCount(s(R.string.fusion_unknown))
-    }
-
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.onAllNodesWithTextCount(text: String) {
         val count = onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().size
         assertTrue("\"$text\" shown", count > 0)
-    }
-
-    @Test
-    fun qualitySectionOffersLosslessOnlyWithAnAddon() {
-        scrolling { FusionQualitySection(emptyBackdrop(), onOpenSources = {}, onOpenStreamInfo = {}) }
-        compose.onNodeWithText(s(R.string.fusion_on_wifi)).assertExists()
-        val locked = s(R.string.fusion_tier_lossless) + " — " + s(R.string.fusion_lossless_needs_addon)
-        compose.onAllNodesWithTextCount(locked)
-        // Choosing it does nothing without an addon.
-        val before = Fusion.settings.wifiTier.value
-        compose.onAllNodes(hasText(locked))[0].performScrollTo().performClick()
-        assertEquals(before, Fusion.settings.wifiTier.value)
     }
 
     @Test
@@ -119,7 +77,7 @@ class FusionScreensTest {
 
     @Test
     fun spotifySectionAsksToSignInWhenNotConnected() {
-        scrolling { SpotifyFreeSection(onSignIn = {}, onOpenLibrary = {}) }
+        scrolling { SpotifyFreeSection(onSignIn = {}) }
         compose.onNodeWithText(s(R.string.fusion_spotify_sign_in)).assertExists()
     }
 }
