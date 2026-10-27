@@ -5,6 +5,12 @@ import android.app.Application
 import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.lelonio.square.fusion.spotify.SpotifyFreeAccount
+import dev.lelonio.square.fusion.spotify.SpotifyFreeLibrary
+import dev.lelonio.square.fusion.spotify.SpotifyLibraryStore
+import dev.lelonio.square.fusion.spotify.SpotifyMatches
+import dev.lelonio.square.fusion.spotify.SpotifyPlaylistUnavailable
+import dev.lelonio.square.fusion.spotify.SpotifyTrack
 import dev.lelonio.square.SquareApplication
 import dev.lelonio.square.auth.SpotifyOAuth
 import dev.lelonio.square.backend.BackendAuthState
@@ -825,6 +831,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         followKeptYouTube()
+        // Square Fusion: the Library follows the Spotify library as it syncs.
+        viewModelScope.launch {
+            SpotifyLibraryStore.state.collect {
+                (_state.value as? UiState.Ready)?.let { ready ->
+                    _state.value = ready.copy(playlists = withLocalFiles(ready.playlists))
+                }
+                _followedArtists.value = withSpotifyArtists(_followedArtists.value)
+            }
+        }
         // A video in an open list, put right as its song is found; see
         // YouTubeBackend.asSongs, which opens the list without waiting for all.
         viewModelScope.launch {
@@ -1227,7 +1242,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // says can be written to; they are asked for as the sheet opens.
         val backend = container.activeBackend
         if (backend.id != BackendId.SPOTIFY) {
-            val writable = trackUri != null && backend.owns(trackUri) && backend.canEditPlaylists
+            // Square Fusion: a Spotify song not yet matched has no YouTube id to add.
+            val writable = trackUri != null && backend.owns(trackUri) && backend.canEditPlaylists &&
+                !dev.lelonio.square.fusion.spotify.SpotifyMatches.isPlaceholder(
+                    dev.lelonio.square.backend.youtube.YouTubeBackend.videoIdOfUri(trackUri),
+                )
             _addToPlaylist.value = AddToPlaylistState(
                 open = asSheet,
                 trackUri = trackUri,
@@ -2686,8 +2705,150 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 name = string(R.string.downloaded_tracks),
                 artworkUrl = dev.lelonio.square.ui.components.DOWNLOADS_COVER,
             ),
-        ) + playlists.filterNot { it.uri == DownloadStore.SINGLES || it.uri == LocalLibrary.CONTEXT_URI }
-            .distinctBy { it.uri }
+        ) + playlists.filterNot {
+            it.uri == DownloadStore.SINGLES || it.uri == LocalLibrary.CONTEXT_URI ||
+                it.uri.startsWith(SpotifyLibraryStore.PLAYLIST_PREFIX)
+        }.distinctBy { it.uri } + spotifyPlaylists()
+
+    /**
+     * Square Fusion: the Spotify account's playlists, its liked songs and the
+     * playlists imported from a link, after YouTube Music's own; see
+     * SpotifyLibraryStore.
+     */
+    private fun spotifyPlaylists(): List<CatalogPlaylist> =
+        SpotifyLibraryStore.state.value.playlists.map {
+            CatalogPlaylist(
+                uri = it.uri,
+                name = if (it.id == SpotifyFreeLibrary.LIKED_ID) string(R.string.fusion_spotify_liked) else it.name,
+                artworkUrl = it.imageUrl,
+                mine = false,
+            )
+        }
+
+    /** Square Fusion: the artists the Spotify account follows, after YouTube Music's. */
+    private fun withSpotifyArtists(artists: List<SearchItem>): List<SearchItem> =
+        artists.filterNot { it.uri.startsWith(SpotifyLibraryStore.ARTIST_PREFIX) } +
+            SpotifyLibraryStore.state.value.artists
+                .filter { spotify -> artists.none { it.title.equals(spotify.name, ignoreCase = true) } }
+                .map {
+                    SearchItem(
+                        uri = SpotifyLibraryStore.ARTIST_PREFIX + android.net.Uri.encode(it.name),
+                        title = it.name,
+                        subtitle = "",
+                        artworkUrl = it.imageUrl,
+                    )
+                }
+
+    /**
+     * Square Fusion: a Spotify playlist, opened as any other. Its songs are
+     * queued as YouTube Music placeholders (SpotifyMatches.uriFor) and play
+     * through YouTube Music, matched as each one loads.
+     */
+    private fun openSpotifyPlaylist(playlist: CatalogPlaylist) {
+        val id = SpotifyLibraryStore.playlistIdOf(playlist.uri) ?: return
+        playlistJob?.cancel()
+        val known = SpotifyLibraryStore.playlist(id)
+        val base = PlaylistState(
+            uri = playlist.uri,
+            name = playlist.name,
+            artworkUrl = playlist.artworkUrl,
+            kind = DetailKind.PLAYLIST,
+            description = known?.owner.orEmpty(),
+            mine = false,
+        )
+        fun asTracks(list: List<SpotifyTrack>) = list.map {
+            CatalogTrack(
+                uri = SpotifyMatches.uriFor(it.id),
+                name = it.title,
+                artist = it.artist,
+                album = it.album.orEmpty(),
+                durationMs = it.durationMs.toLong(),
+                artworkUrl = it.imageUrl,
+            )
+        }
+        val cached = SpotifyLibraryStore.cachedTracks(id)
+        publishPlaylist(base.copy(tracks = asTracks(cached), loading = cached.isEmpty()))
+        playlistJob = viewModelScope.launch {
+            SpotifyLibraryStore.loadTracks(id) { page ->
+                if (cached.isEmpty() && _playlist.value.uri == playlist.uri) {
+                    publishPlaylist(base.copy(tracks = asTracks(page), loading = false, loadingMore = true))
+                }
+            }
+                .onSuccess { publishPlaylist(base.copy(tracks = asTracks(it), loading = false)) }
+                .onFailure {
+                    android.util.Log.w(TAG, "spotify playlist unavailable: ${describe(it)}")
+                    publishPlaylist(
+                        base.copy(
+                            tracks = asTracks(cached),
+                            loading = false,
+                            error = if (cached.isEmpty()) spotifyError(it) else null,
+                        ),
+                    )
+                }
+        }
+    }
+
+    /** Square Fusion: a followed Spotify artist opens as the same artist on YouTube Music. */
+    private fun openSpotifyArtist(playlist: CatalogPlaylist) {
+        val name = android.net.Uri.decode(playlist.uri.removePrefix(SpotifyLibraryStore.ARTIST_PREFIX))
+        viewModelScope.launch {
+            val found = runCatching {
+                com.metrolist.innertube.YouTube.search(name, com.metrolist.innertube.YouTube.SearchFilter.FILTER_ARTIST)
+                    .getOrNull()?.items.orEmpty()
+                    .filterIsInstance<com.metrolist.innertube.models.ArtistItem>()
+                    .firstOrNull { SpotifyMatches.normalize(it.title) == SpotifyMatches.normalize(name) }
+            }.getOrNull()
+            if (found == null) {
+                android.widget.Toast.makeText(
+                    getApplication(),
+                    string(R.string.fusion_spotify_not_found),
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+                return@launch
+            }
+            openPlaylist(
+                CatalogPlaylist(
+                    uri = dev.lelonio.square.backend.youtube.YouTubeBackend.ARTIST_PREFIX + found.id,
+                    name = found.title,
+                    artworkUrl = found.thumbnail,
+                    isArtist = true,
+                ),
+            )
+        }
+    }
+
+    /** What to say when Spotify did not answer, in the app's words. */
+    private fun spotifyError(error: Throwable): String = when {
+        error is SpotifyPlaylistUnavailable ||
+            (error as? SpotifyFreeAccount.FailureException)?.failure is SpotifyFreeAccount.Failure.Protocol ->
+            string(R.string.fusion_spotify_unavailable)
+        (error as? SpotifyFreeAccount.FailureException)?.failure == SpotifyFreeAccount.Failure.SessionExpired ->
+            string(R.string.fusion_spotify_expired)
+        else -> string(R.string.cannot_connect)
+    }
+
+    /**
+     * Square Fusion: imports a Spotify playlist from a link (Library › + ›
+     * Import a playlist) and opens it. Runs in the background; [onDone] gets
+     * null on success, or the message to show.
+     */
+    fun importSpotifyPlaylist(link: String, onDone: (String?) -> Unit) = viewModelScope.launch {
+        SpotifyLibraryStore.import(link)
+            .onSuccess { playlist ->
+                onDone(null)
+                openPlaylist(CatalogPlaylist(uri = playlist.uri, name = playlist.name, artworkUrl = playlist.imageUrl))
+            }
+            .onFailure {
+                android.util.Log.w(TAG, "spotify import failed: ${describe(it)}")
+                onDone(
+                    when {
+                        it is IllegalArgumentException -> string(R.string.fusion_import_bad_link)
+                        it is SpotifyPlaylistUnavailable -> string(R.string.fusion_spotify_unavailable)
+                        else -> spotifyError(it)
+                    },
+                )
+            }
+    }
 
     /** Covers already looked up, so a second visit to the home page is free. */
     private val coverCache = mutableMapOf<String, String>()
@@ -2860,14 +3021,70 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * sent.
      */
     fun openLink(uri: String) = viewModelScope.launch {
-        // A Spotify link is a Spotify page. Arriving on the other backend, it
-        // would resolve against a catalogue that has never heard of it.
-        if (container.activeBackend.id != BackendId.SPOTIFY) {
-            container.preferences.setBackend(BackendId.SPOTIFY)
+        // Square Fusion: YouTube Music is the only backend. A Spotify playlist
+        // is imported into the Library and opened; an album or an artist
+        // opens as the same one on YouTube Music, found by the name its public
+        // page gives.
+        val (kind, id) = dev.lelonio.square.fusion.spotify.SpotifyLinks.parse(uri) ?: run {
+            openContext(uri, "")
+            return@launch
         }
-        // No name and no picture: the page asks for both itself, and shows the
-        // list without waiting for either.
-        openContext(uri, "")
+        when (kind) {
+            "playlist" -> {
+                publishPlaylist(PlaylistState(uri = SpotifyLibraryStore.PLAYLIST_PREFIX + id, loading = true))
+                importSpotifyPlaylist(uri) { message ->
+                    if (message != null) publishPlaylist(_playlist.value.copy(loading = false, error = message))
+                }
+            }
+            "artist" -> {
+                val info = dev.lelonio.square.fusion.spotify.SpotifyLinks.pageInfo(kind, id)
+                if (info == null) {
+                    publishPlaylist(PlaylistState(loading = false, error = string(R.string.fusion_spotify_unavailable)))
+                } else {
+                    openPlaylist(CatalogPlaylist(uri = SpotifyLibraryStore.ARTIST_PREFIX + android.net.Uri.encode(info.title), name = info.title))
+                }
+            }
+            else -> {
+                val info = dev.lelonio.square.fusion.spotify.SpotifyLinks.pageInfo(kind, id)
+                val album = info?.let {
+                    runCatching {
+                        com.metrolist.innertube.YouTube.search("${it.title} ${it.artist}", com.metrolist.innertube.YouTube.SearchFilter.FILTER_ALBUM)
+                            .getOrNull()?.items.orEmpty()
+                            .filterIsInstance<com.metrolist.innertube.models.AlbumItem>()
+                            .firstOrNull { a -> SpotifyMatches.normalize(a.title) == SpotifyMatches.normalize(it.title) }
+                    }.getOrNull()
+                }
+                if (album == null) {
+                    publishPlaylist(PlaylistState(loading = false, error = string(R.string.fusion_spotify_not_found)))
+                } else {
+                    openPlaylist(
+                        CatalogPlaylist(
+                            uri = dev.lelonio.square.backend.youtube.YouTubeBackend.PLAYLIST_PREFIX + album.playlistId,
+                            name = album.title,
+                            artworkUrl = album.thumbnail,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Square Fusion: a shared Spotify song, as a row that plays through YouTube
+     * Music (matched when it loads), from the public page's own description.
+     */
+    suspend fun spotifyTrackFromLink(uri: String): CatalogTrack? {
+        val (kind, id) = dev.lelonio.square.fusion.spotify.SpotifyLinks.parse(uri) ?: return null
+        if (kind != "track") return null
+        val info = dev.lelonio.square.fusion.spotify.SpotifyLinks.pageInfo(kind, id) ?: return null
+        SpotifyMatches.register(id, SpotifyMatches.Target(info.title, info.artist, null, info.durationSec))
+        return CatalogTrack(
+            uri = SpotifyMatches.uriFor(id),
+            name = info.title,
+            artist = info.artist,
+            durationMs = (info.durationSec ?: 0) * 1000L,
+            artworkUrl = info.imageUrl,
+        )
     }
 
     /**
@@ -4141,6 +4358,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         if (playlist.uri == LocalLibrary.CONTEXT_URI) {
             openLocalFiles(playlist)
+            return
+        }
+
+        // Square Fusion: the Spotify library's pages.
+        if (playlist.uri.startsWith(SpotifyLibraryStore.PLAYLIST_PREFIX)) {
+            openSpotifyPlaylist(playlist)
+            return
+        }
+        if (playlist.uri.startsWith(SpotifyLibraryStore.ARTIST_PREFIX)) {
+            openSpotifyArtist(playlist)
             return
         }
 
@@ -6491,8 +6718,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadFollowedArtists() = viewModelScope.launch {
         if (container.activeBackend.id != BackendId.SPOTIFY) {
-            _followedArtists.value = runCatching { container.activeBackend.followedArtists().distinctBy { it.uri } }
-                .getOrDefault(emptyList())
+            _followedArtists.value = withSpotifyArtists(
+                runCatching { container.activeBackend.followedArtists().distinctBy { it.uri } }
+                    .getOrDefault(emptyList()),
+            )
             return@launch
         }
         if (!container.webApi.isReady) {

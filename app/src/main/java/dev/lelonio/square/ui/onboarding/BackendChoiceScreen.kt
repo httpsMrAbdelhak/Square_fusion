@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.dp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.Regular
-import com.adamglin.phosphoricons.fill.SpotifyLogo
 import com.adamglin.phosphoricons.fill.YoutubeLogo
 import com.adamglin.phosphoricons.regular.CaretRight
 import dev.lelonio.square.R
@@ -77,8 +76,7 @@ fun BackendChoiceScreen(onChoose: (BackendId) -> Unit) {
                     AppGlyph(56.dp)
                     Spacer(Modifier.height(20.dp))
                     SquareWordmark(height = 24.dp)
-                    StepHeader(stringResource(R.string.backend_choice_title))
-                    ProseText(stringResource(R.string.backend_choice_subtitle))
+                    StepHeader(stringResource(R.string.fusion_start_title))
                 }
 
                 // A card each rather than a radio row: there is no "confirm".
@@ -88,13 +86,8 @@ fun BackendChoiceScreen(onChoose: (BackendId) -> Unit) {
                     Modifier.padding(top = 32.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    SourceCard(
-                        logo = PhosphorIcons.Fill.SpotifyLogo,
-                        title = stringResource(R.string.backend_spotify),
-                        description = stringResource(R.string.backend_choice_spotify_note),
-                        needs = stringResource(R.string.backend_choice_spotify_needs),
-                        onClick = { onChoose(BackendId.SPOTIFY) },
-                    )
+                    // Square Fusion: YouTube Music is the only service. Spotify
+                    // is connected later, from the settings, for its library.
                     SourceCard(
                         logo = PhosphorIcons.Fill.YoutubeLogo,
                         title = stringResource(R.string.backend_youtube),

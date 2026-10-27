@@ -575,9 +575,9 @@
     <string name="font_title">Police</string>
     <string name="font_system">Utiliser la police du téléphone</string>
     <string name="youtube_quality_auto">Automatique : haute en Wi-Fi, basse en données mobiles</string>
-    <string name="youtube_quality_high">Haute (environ 128 kb/s)</string>
-    <string name="youtube_quality_low">Basse, économise les données (environ 48 kb/s)</string>
-    <string name="youtube_quality_note">S’applique à partir du titre suivant. Les téléchargements gardent toujours la meilleure qualité.</string>
+    <string name="youtube_quality_high">Haute (AAC, environ 128 kb/s)</string>
+    <string name="youtube_quality_low">Basse, économise les données (environ 50 kb/s)</string>
+    <string name="youtube_quality_note">S’applique à partir du titre suivant. Les débits sont ceux que YouTube indique pour chaque flux. Les téléchargements gardent toujours la meilleure qualité.</string>
     <string name="lyrics_options">Paroles</string>
     <string name="lyrics_source_title">Source</string>
     <string name="lyrics_style_title">Style</string>

@@ -446,15 +446,7 @@ class MixerSlot(
     @Volatile var mixed = false
         internal set
 
-    /**
-     * Square Fusion's loudness normalisation for the song this slot's player is
-     * on, never above one; see fusion.audio.Normalization. One, and so no
-     * change at all, while normalisation is off. Per slot rather than
-     * followed: each of the two players is on its own song.
-     */
-    @Volatile var level = 1f
-
-    internal fun gain(): Float = fade * (follows ?: this).volume * level
+    internal fun gain(): Float = fade * (follows ?: this).volume
 }
 
 /** One output of one player, as ExoPlayer sees it. */

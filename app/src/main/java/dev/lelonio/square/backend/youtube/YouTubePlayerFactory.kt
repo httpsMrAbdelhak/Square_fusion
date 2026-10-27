@@ -74,19 +74,9 @@ object YouTubePlayerFactory {
             )
             .setLooper(host.looper)
             .build()
-            .also { exo -> fusionLevels(exo, slot, lateLoudness = handleFocus) }
 
         return buildPlayer(true, mainSlot).let { exo ->
                 exo.addAnalyticsListener(Diagnostics)
-                // Square Fusion: what the decoder really received; see StreamInspector.
-                exo.addAnalyticsListener(dev.lelonio.square.fusion.audio.StreamInspector.listener)
-                dev.lelonio.square.fusion.audio.StreamInspector.mixed = { mainSlot.mixed }
-                dev.lelonio.square.fusion.audio.StreamInspector.mixerRateHz = PcmMixer.RATE
-                exo.addListener(object : Player.Listener {
-                    override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
-                        dev.lelonio.square.fusion.audio.StreamInspector.onItem(mediaItem?.mediaId)
-                    }
-                })
                 // A song YouTube plays only to an account, with none signed in:
                 // said, and passed over, rather than left at --:-- with no word
                 // of why. See SignedInStreams.
@@ -96,6 +86,10 @@ object YouTubePlayerFactory {
                         SignedInStreams.forget()
                         val causes = generateSequence<Throwable>(error) { it.cause }.toList()
                         val message = when {
+                            // Square Fusion: a Spotify song with no close enough
+                            // match on YouTube Music; tapping it again retries.
+                            causes.any { it is dev.lelonio.square.fusion.spotify.SpotifyMatches.NotFound } ->
+                                dev.lelonio.square.R.string.fusion_spotify_not_found
                             causes.any { it is SignedInStreams.SignInRequired } ->
                                 dev.lelonio.square.R.string.youtube_sign_in_required
                             causes.any { it is SignedInStreams.Refused } ->
@@ -149,6 +143,20 @@ object YouTubePlayerFactory {
                         if (SongCounterparts.wanted(video)) retitle(exo, video, song)
                     }
                 }
+                // Square Fusion: a Spotify song, once found on YouTube Music,
+                // is renamed to the real song in the queue: same stream
+                // address, so nothing reloads, and likes, lyrics and downloads
+                // read the real id from then on; see SpotifyMatches.
+                CoroutineScope(SupervisorJob() + android.os.Handler(host.looper).asCoroutineDispatcher()).launch {
+                    dev.lelonio.square.fusion.spotify.SpotifyMatches.resolved.collect { (placeholder, real) ->
+                        for (index in 0 until exo.mediaItemCount) {
+                            val item = exo.getMediaItemAt(index)
+                            if (item.mediaId == placeholder) {
+                                exo.replaceMediaItem(index, item.buildUpon().setMediaId(real).build())
+                            }
+                        }
+                    }
+                }
                 // The talking and the sketches around a music video; see SponsorBlock.
                 SponsorBlock(exo) { preferences?.sponsorBlock?.value ?: true }
                 // Every change of song the listener asks for goes through the
@@ -156,28 +164,6 @@ object YouTubePlayerFactory {
                 mixer.skipFadeMs = { preferences?.skipFadeMs() ?: 0 }
                 SkipFadePlayer(exo, fades) { preferences?.skipFadeMs() ?: 0 }
             }
-    }
-
-    /**
-     * Square Fusion's loudness normalisation for [exo]'s songs, on its own
-     * slot in the mixer. Level one, and so Square's own sound, while the
-     * setting is off; see fusion.audio.Normalization.
-     */
-    private fun fusionLevels(exo: ExoPlayer, slot: MixerSlot, lateLoudness: Boolean) {
-        val handler = android.os.Handler(exo.applicationLooper)
-        fun update() {
-            val id = exo.currentMediaItem?.mediaId
-                ?.takeIf { it.startsWith(YouTubeBackend.TRACK_PREFIX) }
-                ?.let(YouTubeBackend::videoIdOfUri)
-            slot.level = dev.lelonio.square.fusion.audio.Normalization.levelFor(id)
-        }
-        exo.addListener(object : Player.Listener {
-            override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) = update()
-        })
-        // A loudness that arrives after the song started, for the main player
-        // only: it lives as long as the app, where the crossfade's tail
-        // players come and go.
-        if (lateLoudness) dev.lelonio.square.fusion.audio.Normalization.addListener { handler.post { update() } }
     }
 
     /**
@@ -413,9 +399,9 @@ private class YouTubeStreamResolver(
             PART_AUDIO -> SignedInStreams.Kind.AUDIO
             else -> if (YouTubeVideoMode.wantsVideo(base)) SignedInStreams.Kind.MUXED else SignedInStreams.Kind.AUDIO
         }
-        val id = YouTubeBackend.videoIdOfUri(base)
+        val id = realVideoId(base)
         val url = try {
-            SignedInStreams.url(context, id, kind, wantsLowRate())
+            SignedInStreams.url(context, id, kind, wantsLowRate(), AudioQuality.tierNow(context))
         } catch (refused: SignedInStreams.SignInRequired) {
             throw refused
         } catch (refused: Exception) {
@@ -445,25 +431,7 @@ private class YouTubeStreamResolver(
         if (kept != null && part == null &&
             (!video || dev.lelonio.square.playback.OfflineMode.active.value)
         ) {
-            // A lossless file kept from one of Square Fusion's sources is not
-            // YouTube's file: YouTube's loudness does not describe it.
-            dev.lelonio.square.fusion.audio.Normalization.markSubstituted(
-                YouTubeBackend.videoIdOfUri(base),
-                kept.extension in setOf("flac", "wav", "aiff"),
-            )
             return dataSpec.withUri(android.net.Uri.fromFile(kept))
-        }
-
-        // Square Fusion: a song heard (not watched) may come from one of the
-        // user's sources instead; with none configured this is a no-op, and
-        // any failure leaves the song to YouTube below. See fusion.Fusion.
-        if (!video && part == null && base.startsWith(YouTubeBackend.TRACK_PREFIX)) {
-            val songIdForSources = YouTubeBackend.videoIdOfUri(base)
-            dev.lelonio.square.fusion.audio.Normalization.prefetch(songIdForSources)
-            dev.lelonio.square.fusion.Fusion.substituteBlocking(base, songIdForSources)?.let { found ->
-                return dataSpec.withUri(android.net.Uri.parse(found.url))
-                    .let { if (found.headers.isEmpty()) it else it.withAdditionalHeaders(found.headers) }
-            }
         }
 
         // NewPipe holds its downloader in a static, and every extractor reads it
@@ -472,7 +440,9 @@ private class YouTubeStreamResolver(
         // a YouTube track never builds one.
         YouTubeStreams.ensureNewPipe()
 
-        val songId = YouTubeBackend.videoIdOfUri(base)
+        // Square Fusion: a Spotify song's placeholder id becomes the YouTube
+        // Music song found for it here; see SpotifyMatches.
+        val songId = realVideoId(base)
         // A song watched rather than heard is its official video, sound and
         // all; see YouTubeStreams.watchSource. A video is already itself.
         val watching = part != null || video
@@ -518,27 +488,64 @@ private class YouTubeStreamResolver(
         } else {
             null
         }
-        // Audio-only otherwise, best bitrate: a muxed stream would carry a video
-        // track nobody is going to look at, over a connection that is often the
-        // scarce resource. Also the fallback when a track has no muxed stream.
-            // AAC before Opus, even at a lower rate: the app decodes AAC itself
-            // (FFmpeg, see renderers), while Opus goes to the platform decoder,
-            // whose release aborts the app on this hardware.
-            //
-            // At the rate the listener asked for: the highest, the lowest, or
-            // the highest on Wi-Fi and the lowest on a metered connection.
-            ?: info.audioStreams
-                .filter { !it.content.isNullOrEmpty() }
-                .sortedWith(
-                    compareByDescending<org.schabi.newpipe.extractor.stream.AudioStream> {
-                        it.format == org.schabi.newpipe.extractor.MediaFormat.M4A
-                    }.thenBy { if (wantsLowRate()) it.averageBitrate else -it.averageBitrate },
-                )
-                .firstOrNull()
-                ?.content
+        // Audio-only otherwise: a muxed stream would carry a video track nobody
+        // is going to look at, over a connection that is often the scarce
+        // resource. Also the fallback when a track has no muxed stream.
+        //
+        // Square Fusion: at the tier the listener chose (low, medium, high,
+        // maximum, or automatic: high on Wi-Fi, low when metered); see
+        // AudioQuality. Square picked AAC first, because Opus once went to the
+        // platform decoder; the player now prefers the app's own FFmpeg, which
+        // decodes Opus, so the tiers may pick it. High keeps Square's AAC.
+            ?: audioFor(videoId, info, part == null && !video)
             ?: error("nessuna traccia audio per $videoId")
 
         return dataSpec.withUri(android.net.Uri.parse(url))
+    }
+
+    /**
+     * The audio stream's address at the chosen tier. At the maximum, with an
+     * account signed in, the account's own formats are asked for first: the
+     * ~256 kbps renditions exist only for YouTube Music Premium; see
+     * SignedInStreams.premiumAudio. Anything else, or their absence, is the
+     * anonymous stream, as before.
+     */
+    private fun audioFor(videoId: String, info: StreamInfo, heard: Boolean): String? {
+        val tier = AudioQuality.tierNow(context)
+        if (heard && tier == AudioQuality.Tier.MAX) {
+            runCatching { SignedInStreams.premiumAudio(context, videoId) }
+                .onFailure { android.util.Log.i("SquareYTQuality", "$videoId: no premium stream (${it.message})") }
+                .getOrNull()
+                ?.let { (url, format) ->
+                    AudioQuality.record(
+                        AudioQuality.Choice(tier, format.mimeType.substringBefore(';'), format.bitrate / 1000, format.itag, signedIn = true),
+                    )
+                    return url
+                }
+        }
+        val streams = info.audioStreams.filter { !it.content.isNullOrEmpty() }
+        val chosen = AudioQuality.pick(
+            streams,
+            tier,
+            kbps = { it.averageBitrate },
+            isAac = { it.format == org.schabi.newpipe.extractor.MediaFormat.M4A },
+        ) ?: return null
+        if (heard) {
+            AudioQuality.record(
+                AudioQuality.Choice(tier, chosen.format?.name ?: "?", chosen.averageBitrate, chosen.itag, signedIn = false),
+            )
+        }
+        return chosen.content
+    }
+
+    /** The video id of [uri], with a Spotify song's placeholder matched on YouTube Music first. */
+    private fun realVideoId(uri: String): String {
+        val id = YouTubeBackend.videoIdOfUri(uri)
+        return if (dev.lelonio.square.fusion.spotify.SpotifyMatches.isPlaceholder(id)) {
+            dev.lelonio.square.fusion.spotify.SpotifyMatches.videoIdBlocking(id)
+        } else {
+            id
+        }
     }
 
     /** Whether the lower rate is wanted now; see PreferencesStore.youtubeQuality. */
@@ -546,8 +553,10 @@ private class YouTubeStreamResolver(
         val chosen = (context.applicationContext as? dev.lelonio.square.SquareApplication)
             ?.preferences?.youtubeQuality?.value
         return when (chosen) {
-            dev.lelonio.square.data.PreferencesStore.YouTubeQuality.LOW -> true
-            dev.lelonio.square.data.PreferencesStore.YouTubeQuality.HIGH -> false
+            dev.lelonio.square.data.PreferencesStore.YouTubeQuality.LOW,
+            dev.lelonio.square.data.PreferencesStore.YouTubeQuality.MEDIUM -> true
+            dev.lelonio.square.data.PreferencesStore.YouTubeQuality.HIGH,
+            dev.lelonio.square.data.PreferencesStore.YouTubeQuality.MAX -> false
             else -> context.getSystemService(android.net.ConnectivityManager::class.java)
                 ?.isActiveNetworkMetered == true
         }
@@ -573,17 +582,6 @@ private class VideoAwareSourceFactory(
 
     override fun createMediaSource(mediaItem: androidx.media3.common.MediaItem): androidx.media3.exoplayer.source.MediaSource {
         val uri = mediaItem.localConfiguration?.uri?.toString() ?: return base.createMediaSource(mediaItem)
-        // Square Fusion: what the queue knows about the song, for the sources
-        // to match it by; see fusion.Fusion.substituteBlocking.
-        if (uri.startsWith(YouTubeBackend.TRACK_PREFIX)) {
-            val meta = mediaItem.mediaMetadata
-            dev.lelonio.square.fusion.Fusion.hint(
-                uri.substringBefore('#'),
-                meta.title?.toString(),
-                meta.artist?.toString(),
-                meta.durationMs,
-            )
-        }
         val ours = uri.startsWith(YouTubeBackend.TRACK_PREFIX) || uri.startsWith(YouTubeBackend.VIDEO_PREFIX)
         if (!ours || !YouTubeVideoMode.wantsVideo(uri)) return base.createMediaSource(mediaItem)
         fun half(part: String) = progressive.createMediaSource(
@@ -665,9 +663,15 @@ object YouTubeStreams {
 
     /** Asks ahead for what [uri] will need, so the next item starts at once. */
     fun prefetch(uri: String) {
-        val id = YouTubeBackend.videoIdOfUri(uri)
+        val listed = YouTubeBackend.videoIdOfUri(uri)
         prefetcher.execute {
             runCatching {
+                // Square Fusion: a Spotify song is matched ahead too.
+                val id = if (dev.lelonio.square.fusion.spotify.SpotifyMatches.isPlaceholder(listed)) {
+                    dev.lelonio.square.fusion.spotify.SpotifyMatches.videoIdBlocking(listed)
+                } else {
+                    listed
+                }
                 if (uri.startsWith(YouTubeBackend.TRACK_PREFIX) && YouTubeVideoMode.wantsVideo(uri)) {
                     watchSource(id)
                 } else {

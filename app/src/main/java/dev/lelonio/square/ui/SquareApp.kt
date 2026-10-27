@@ -1479,7 +1479,8 @@ fun SquareApp(
                             navController.navigate(Routes.PLAYLIST) { launchSingleTop = true }
                         }
                     } else if (uri.startsWith("spotify:track:")) {
-                        sharedTrack = viewModel.resolveTrack(uri)
+                        // Square Fusion: played through YouTube Music.
+                        sharedTrack = viewModel.spotifyTrackFromLink(uri)
                     } else {
                         viewModel.openLink(uri)
                         if (navController.currentDestination?.route != Routes.PLAYLIST) {
@@ -1723,13 +1724,6 @@ fun SquareApp(
                                 onLoadMoreYouTube = viewModel::loadMoreYouTubeHome,
                                 youtubeSignedIn = youtubeAccountName != null,
                                 onYouTubeSignIn = { showYouTubeLogin = true },
-                                onSwitchSource = {
-                                    preferences.setBackend(
-                                        if (backend == dev.lelonio.square.backend.BackendId.SPOTIFY)
-                                            dev.lelonio.square.backend.BackendId.YOUTUBE_MUSIC
-                                        else dev.lelonio.square.backend.BackendId.SPOTIFY,
-                                    )
-                                },
                                 onUseYouTube = {
                                     preferences.setBackend(dev.lelonio.square.backend.BackendId.YOUTUBE_MUSIC)
                                 },
@@ -2007,12 +2001,6 @@ fun SquareApp(
                                     // read for the one before it.
                                     viewModel.refresh()
                                     viewModel.loadYouTubeHome(force = true)
-                                },
-                                // Square Fusion: a song from the Spotify
-                                // library, looked up on the search page.
-                                onSearchOnYouTube = { query ->
-                                    viewModel.onSearchQuery(query)
-                                    navController.switchTab(Routes.SEARCH)
                                 },
                             )
                         }

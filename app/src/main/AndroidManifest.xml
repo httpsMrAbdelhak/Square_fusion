@@ -25,17 +25,6 @@
       exists so a music player does not have to ask to see photographs.
     -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-
-    <!--
-      Square Fusion: reading which codec a Bluetooth output uses, for addons
-      that require a lossless-capable output (checkValidLossless). Asked for
-      at run time only from the stream information page, and everything works
-      without it: the codec is then reported unknown.
-    -->
-    <uses-permission
-        android:name="android.permission.BLUETOOTH"
-        android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />

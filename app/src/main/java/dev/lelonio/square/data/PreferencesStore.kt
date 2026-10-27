@@ -141,7 +141,10 @@ class PreferencesStore(context: Context) {
     }
 
     /** How YouTube Music's sound is chosen; see [youtubeQuality]. */
-    enum class YouTubeQuality { AUTO, HIGH, LOW }
+    // Square Fusion: medium and maximum added; the stored names of the others
+    // are unchanged, so a saved choice still reads. Listed in the settings'
+    // order. See backend.youtube.AudioQuality.
+    enum class YouTubeQuality { AUTO, LOW, MEDIUM, HIGH, MAX }
 
     private val _youtubeQuality = MutableStateFlow(
         YouTubeQuality.entries.firstOrNull { it.name == prefs.getString(KEY_YOUTUBE_QUALITY, null) } ?: YouTubeQuality.AUTO,
@@ -319,18 +322,27 @@ class PreferencesStore(context: Context) {
         prefs.edit().putBoolean(KEY_PLAYER_OPEN, value).apply()
     }
 
-    private val _backend = MutableStateFlow(
-        runCatching { dev.lelonio.square.backend.BackendId.valueOf(prefs.getString(KEY_BACKEND, null) ?: "") }
-            .getOrDefault(dev.lelonio.square.backend.BackendId.SPOTIFY),
-    )
+    /**
+     * Square Fusion plays through YouTube Music only. A choice of Spotify
+     * saved by an earlier version is read as YouTube Music and rewritten, so
+     * it can neither bring the Spotify engine back nor leave a screen built
+     * for it; Spotify is only a library source here (fusion.spotify).
+     */
+    private val _backend = MutableStateFlow(dev.lelonio.square.backend.BackendId.YOUTUBE_MUSIC).also {
+        if (prefs.contains(KEY_BACKEND) &&
+            prefs.getString(KEY_BACKEND, null) != dev.lelonio.square.backend.BackendId.YOUTUBE_MUSIC.name
+        ) {
+            prefs.edit().putString(KEY_BACKEND, dev.lelonio.square.backend.BackendId.YOUTUBE_MUSIC.name).apply()
+        }
+    }
 
-    /** Which [dev.lelonio.square.backend.MusicBackend] the app plays through. */
+    /** Which [dev.lelonio.square.backend.MusicBackend] the app plays through: always YouTube Music. */
     val backend: StateFlow<dev.lelonio.square.backend.BackendId> = _backend.asStateFlow()
 
-    fun setBackend(value: dev.lelonio.square.backend.BackendId) {
-        _backend.value = value
+    /** Records that the first-launch screen was passed; the backend stays YouTube Music. */
+    fun setBackend(@Suppress("UNUSED_PARAMETER") value: dev.lelonio.square.backend.BackendId) {
         _backendChosen.value = true
-        prefs.edit().putString(KEY_BACKEND, value.name).apply()
+        prefs.edit().putString(KEY_BACKEND, dev.lelonio.square.backend.BackendId.YOUTUBE_MUSIC.name).apply()
     }
 
     private val _backendChosen = MutableStateFlow(prefs.contains(KEY_BACKEND))

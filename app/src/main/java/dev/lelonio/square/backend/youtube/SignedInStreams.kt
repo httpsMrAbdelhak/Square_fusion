@@ -75,9 +75,16 @@ object SignedInStreams {
     fun forget() = urls.clear()
 
     /** The URL of [kind] for [videoId], as the signed-in account; blocking. */
-    fun url(context: android.content.Context, videoId: String, kind: Kind, lowRate: Boolean): String {
+    fun url(
+        context: android.content.Context,
+        videoId: String,
+        kind: Kind,
+        lowRate: Boolean,
+        /** Square Fusion: the quality tier for the sound; null keeps [lowRate]'s rule. */
+        tier: AudioQuality.Tier? = null,
+    ): String {
         if (!available) throw SignInRequired(videoId)
-        val key = "$videoId|$kind|$lowRate"
+        val key = "$videoId|$kind|$lowRate|$tier"
         val now = android.os.SystemClock.elapsedRealtime()
         urls[key]?.takeIf { now - it.first < URL_TTL_MS }?.let { return it.second }
         val script = PlayerChallenges.script(context)
@@ -87,12 +94,17 @@ object SignedInStreams {
         val chosen = when (kind) {
             Kind.AUDIO -> formats?.adaptiveFormats.orEmpty()
                 .filter { it.isAudio && it.isOriginal }
-                // AAC before Opus, as for every other stream; see the resolver.
-                .sortedWith(
-                    compareByDescending<PlayerResponse.StreamingData.Format> { it.mimeType.startsWith("audio/mp4") }
-                        .thenBy { if (lowRate) it.bitrate else -it.bitrate },
-                )
-                .firstOrNull()
+                .let { audio ->
+                    if (tier != null) {
+                        AudioQuality.pick(audio, tier, { it.bitrate / 1000 }, { it.mimeType.startsWith("audio/mp4") })
+                    } else {
+                        // AAC before Opus, as for every other stream; see the resolver.
+                        audio.sortedWith(
+                            compareByDescending<PlayerResponse.StreamingData.Format> { it.mimeType.startsWith("audio/mp4") }
+                                .thenBy { if (lowRate) it.bitrate else -it.bitrate },
+                        ).firstOrNull()
+                    }
+                }
             Kind.VIDEO -> formats?.adaptiveFormats.orEmpty()
                 .filter { !it.isAudio && (it.height ?: 0) in 1..MAX_VIDEO_HEIGHT }
                 .sortedWith(
@@ -118,6 +130,48 @@ object SignedInStreams {
         )
         return url
     }
+
+    /**
+     * Square Fusion: the ~256 kbps sound (itag 141 AAC or 774 Opus) when the
+     * signed-in account is a YouTube Music Premium one; null otherwise.
+     *
+     * Asked of YouTube Music's own web client, the one that lists those
+     * formats, with the account's cookie; Premium streams need no
+     * proof-of-origin token there. An account that is offered none of them
+     * [PREMIUM_TRIES] songs running is taken not to have Premium, and is not
+     * asked again until the app restarts, so the maximum setting costs a
+     * non-Premium account nothing after its first songs.
+     */
+    fun premiumAudio(context: android.content.Context, videoId: String): Pair<String, PlayerResponse.StreamingData.Format>? {
+        if (!available || premiumMisses >= PREMIUM_TRIES) return null
+        val script = PlayerChallenges.script(context)
+        val response = runBlocking {
+            YouTube.player(videoId, client = YouTubeClient.WEB_REMIX, signatureTimestamp = script.signatureTimestamp)
+        }.getOrNull()
+        val issuedAt = android.os.SystemClock.elapsedRealtime()
+        val best = response?.takeIf { it.playabilityStatus.status == "OK" }?.streamingData?.adaptiveFormats.orEmpty()
+            .filter { it.isAudio && it.isOriginal && it.bitrate / 1000 >= AudioQuality.PREMIUM_MIN_KBPS }
+            .maxByOrNull { it.bitrate }
+        if (best == null) {
+            premiumMisses++
+            android.util.Log.i(TAG, "$videoId: no premium audio offered ($premiumMisses of $PREMIUM_TRIES)")
+            return null
+        }
+        premiumMisses = 0
+        val url = try {
+            urlOf(context, script, best)
+        } catch (failure: Exception) {
+            PlayerChallenges.reset()
+            throw failure
+        }
+        awaitReady(videoId, url, issuedAt)
+        return url to best
+    }
+
+    @Volatile
+    private var premiumMisses = 0
+
+    private const val PREMIUM_TRIES = 3
 
     /**
      * The first signed-in client that will play it. The TV app's comes first,

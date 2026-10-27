@@ -113,8 +113,8 @@ object SpotifyFreeAccount {
     }
 
     /** Runs a library call, turning every way it can fail into a [Failure]. */
-    suspend fun <T> call(block: suspend () -> T): Result<T> = try {
-        if (cookie().isBlank()) {
+    suspend fun <T> call(requireAccount: Boolean = true, block: suspend () -> T): Result<T> = try {
+        if (requireAccount && cookie().isBlank()) {
             Result.failure(FailureException(Failure.SessionExpired))
         } else {
             Result.success(block())

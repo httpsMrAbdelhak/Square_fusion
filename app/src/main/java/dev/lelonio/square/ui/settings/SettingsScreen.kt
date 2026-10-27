@@ -153,8 +153,6 @@ fun SettingsScreen(
     onYouTubeSignIn: () -> Unit = {},
     /** After switching channel: the library and the home belong to the new one. */
     onYouTubeChannelChange: () -> Unit = {},
-    /** Square Fusion: a Spotify song looked up on YouTube Music's search. */
-    onSearchOnYouTube: (String) -> Unit = {},
 ) {
     val ready = state as? MainViewModel.UiState.Ready
     val context = LocalContext.current
@@ -304,32 +302,13 @@ fun SettingsScreen(
         )
         return@AnimatedContent
     }
-    when (shown) {
-        SettingsPage.Sources -> {
-            FusionSourcesPage(contentPadding = contentPadding, header = { heading(shown) })
-            return@AnimatedContent
-        }
-        SettingsPage.StreamInfo -> {
-            FusionStreamInfoPage(contentPadding = contentPadding, header = { heading(shown) })
-            return@AnimatedContent
-        }
-        SettingsPage.SpotifyLogin -> {
-            SpotifyFreeLoginPage(
-                header = { heading(shown) },
-                contentPadding = contentPadding,
-                onDone = { goTo(SettingsPage.SpotifyLibrary) },
-            )
-            return@AnimatedContent
-        }
-        SettingsPage.SpotifyLibrary -> {
-            SpotifyFreeLibraryPage(
-                contentPadding = contentPadding,
-                header = { heading(shown) },
-                onSearch = onSearchOnYouTube,
-            )
-            return@AnimatedContent
-        }
-        else -> Unit
+    if (shown == SettingsPage.SpotifyLogin) {
+        SpotifyFreeLoginPage(
+            header = { heading(shown) },
+            contentPadding = contentPadding,
+            onDone = { goTo(SettingsPage.Account) },
+        )
+        return@AnimatedContent
     }
 
     // Every group folded when a page opens: the headings are the page's
@@ -459,9 +438,7 @@ fun SettingsScreen(
             }
         }
 
-        if (shown == SettingsPage.Playback && "sound" in openGroups) groupItem("backend", Group.SOUND) {
-            BackendSection()
-        }
+        // Square Fusion: no choice of backend; YouTube Music is the only one.
 
         if (shown == SettingsPage.Account) item("youtube-account") {
             YouTubeAccountSection(
@@ -470,12 +447,9 @@ fun SettingsScreen(
             )
         }
 
-        // Square Fusion: a Spotify library (free accounts too), for browsing only.
+        // Square Fusion: the Spotify account whose library shows in the Library.
         if (shown == SettingsPage.Account) item("fusion-spotify") {
-            SpotifyFreeSection(
-                onSignIn = { goTo(SettingsPage.SpotifyLogin) },
-                onOpenLibrary = { goTo(SettingsPage.SpotifyLibrary) },
-            )
+            SpotifyFreeSection(onSignIn = { goTo(SettingsPage.SpotifyLogin) })
         }
 
         // What is kept on the phone. Under Playback rather than Account: it is
@@ -504,15 +478,6 @@ fun SettingsScreen(
         // YouTube Music's own, in the place Spotify's quality has.
         if (shown == SettingsPage.Playback && !showSpotify && "sound" in openGroups) groupItem("youtube-quality", Group.SOUND) {
             YouTubeQualitySection()
-        }
-
-        // Square Fusion: what the addon sources are asked for, beside YouTube's own.
-        if (shown == SettingsPage.Playback && !showSpotify && "sound" in openGroups) groupItem("fusion-quality", Group.SOUND) {
-            FusionQualitySection(
-                backdrop = backdrop,
-                onOpenSources = { goTo(SettingsPage.Sources) },
-                onOpenStreamInfo = { goTo(SettingsPage.StreamInfo) },
-            )
         }
 
         // The effects run on our own output, so this one holds for both backends.
@@ -1073,20 +1038,12 @@ private enum class SettingsPage(
     App(R.string.page_app, R.string.page_app_summary, PhosphorIcons.Regular.SlidersHorizontal),
     About(R.string.about, R.string.page_about_summary, PhosphorIcons.Regular.Info),
 
-    // Square Fusion's own pages, opened from rows inside the pages above and
-    // never shown as tiles of the index; see FUSION_PAGES.
-    Sources(R.string.fusion_sources_title, R.string.fusion_sources_summary, PhosphorIcons.Regular.HardDrives),
-    StreamInfo(R.string.fusion_stream_info_title, R.string.fusion_stream_info_summary, PhosphorIcons.Regular.Info),
-    SpotifyLogin(R.string.fusion_spotify_sign_in, R.string.fusion_spotify_library, PhosphorIcons.Regular.UserCircle),
-    SpotifyLibrary(R.string.fusion_spotify_library, R.string.fusion_spotify_browse, PhosphorIcons.Regular.UserCircle),
+    // Square Fusion's Spotify sign-in, opened from the Account page and never
+    // shown as a tile of the index; see FUSION_PAGES.
+    SpotifyLogin(R.string.fusion_spotify_sign_in, R.string.fusion_spotify_sign_in, PhosphorIcons.Regular.UserCircle),
 }
 
-private val FUSION_PAGES = setOf(
-    SettingsPage.Sources,
-    SettingsPage.StreamInfo,
-    SettingsPage.SpotifyLogin,
-    SettingsPage.SpotifyLibrary,
-)
+private val FUSION_PAGES = setOf(SettingsPage.SpotifyLogin)
 
 /** How long a page takes to arrive, and how quickly the last one goes. */
 private const val PAGE_TRAVEL_MS = 260
@@ -1380,41 +1337,6 @@ private fun PageRow(title: String, summary: String, onClick: () -> Unit) {
  * fourth: this client is served Ogg Vorbis at 320 kbps and below, never a
  * lossless file, so a "lossless" row would be a promise nothing can keep.
  */
-/**
- * Which service the app plays from.
- *
- * The two are not equivalent and the note says so rather than letting the user
- * find out: Spotify is the account's own library, its playlists and its Connect
- * devices, while YouTube Music here is anonymous — the catalogue and search
- * work, an account's own library does not exist to read.
- *
- * Changing it restarts playback, so it is a setting rather than a switch in the
- * player.
- */
-@Composable
-private fun BackendSection() {
-    val context = LocalContext.current
-    val store = remember(context) {
-        (context.applicationContext as dev.lelonio.square.SquareApplication).preferences
-    }
-    val chosen by store.backend.collectAsStateWithLifecycle()
-
-    Section(stringResource(R.string.backend)) {
-        BackendId.entries.forEachIndexed { index, backend ->
-            if (index > 0) RowDivider()
-            ChoiceRow(
-                label = stringResource(
-                    when (backend) {
-                        BackendId.SPOTIFY -> R.string.backend_spotify
-                        BackendId.YOUTUBE_MUSIC -> R.string.backend_youtube
-                    },
-                ),
-                selected = backend == chosen,
-            ) { store.setBackend(backend) }
-        }
-    }
-}
-
 /**
  * The Google account YouTube Music reads a library with.
  *
@@ -1843,12 +1765,31 @@ private fun YouTubeQualitySection() {
                 label = stringResource(
                     when (quality) {
                         dev.lelonio.square.data.PreferencesStore.YouTubeQuality.AUTO -> R.string.youtube_quality_auto
-                        dev.lelonio.square.data.PreferencesStore.YouTubeQuality.HIGH -> R.string.youtube_quality_high
                         dev.lelonio.square.data.PreferencesStore.YouTubeQuality.LOW -> R.string.youtube_quality_low
+                        dev.lelonio.square.data.PreferencesStore.YouTubeQuality.MEDIUM -> R.string.youtube_quality_medium
+                        dev.lelonio.square.data.PreferencesStore.YouTubeQuality.HIGH -> R.string.youtube_quality_high
+                        dev.lelonio.square.data.PreferencesStore.YouTubeQuality.MAX -> R.string.youtube_quality_max
                     },
                 ),
                 selected = quality == chosen,
             ) { store.setYoutubeQuality(quality) }
+        }
+        // Square Fusion: the stream last picked, as YouTube described it.
+        val last by dev.lelonio.square.backend.youtube.AudioQuality.last.collectAsStateWithLifecycle()
+        last?.let { choice ->
+            RowDivider()
+            InfoRow(
+                stringResource(R.string.youtube_quality_last),
+                stringResource(
+                    R.string.youtube_quality_last_value,
+                    when {
+                        choice.codec.contains("mp4", true) || choice.codec.contains("m4a", true) -> "AAC"
+                        choice.codec.contains("opus", true) || choice.codec.contains("webm", true) -> "Opus"
+                        else -> choice.codec
+                    },
+                    choice.kbps,
+                ),
+            )
         }
         RowDivider()
         Text(
@@ -2521,7 +2462,7 @@ private val LICENCES = listOf(
     "yt-dlp ejs" to "Unlicense",
     "meriyah" to "ISC",
     "astring" to "MIT",
-    // Square Fusion: addons, JioSaavn, Spotify library and icons come from BitChord.
+    // Square Fusion: the Spotify library mechanism and the icons come from BitChord.
     "BitChord" to "GPL-3.0",
 )
 

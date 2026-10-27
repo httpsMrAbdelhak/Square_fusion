@@ -86,7 +86,8 @@ internal object SpotifyFreeToken {
      */
     suspend fun accessToken(): String? {
         val cookie = SpotifyFreeAccount.cookie()
-        if (cookie.isBlank()) return null
+        // Square Fusion: with no account, the web player's anonymous token,
+        // which reads public playlists (an imported link) and nothing else.
 
         val now = System.currentTimeMillis()
         cachedAccessToken?.let { if (now < accessTokenExpiresAtMs - 30_000) return it }
@@ -135,8 +136,10 @@ internal object SpotifyFreeToken {
 
         val cookieManager = CookieManager.getInstance().apply {
             setAcceptCookie(true)
-            setCookie("https://open.spotify.com/", "sp_dc=$cookie; Domain=.spotify.com; Path=/; Secure")
-            setCookie("https://accounts.spotify.com/", "sp_dc=$cookie; Domain=.spotify.com; Path=/; Secure")
+            if (cookie.isNotBlank()) {
+                setCookie("https://open.spotify.com/", "sp_dc=$cookie; Domain=.spotify.com; Path=/; Secure")
+                setCookie("https://accounts.spotify.com/", "sp_dc=$cookie; Domain=.spotify.com; Path=/; Secure")
+            }
             flush()
         }
         // The player caches its token in web storage and skips a fresh
@@ -153,7 +156,7 @@ internal object SpotifyFreeToken {
                 settings.domStorageEnabled = true
                 settings.userAgentString = SpotifyFreeAccount.BROWSER_UA
                 cookieManager.setAcceptThirdPartyCookies(this, true)
-                addJavascriptInterface(TokenBridge(deferred), BRIDGE_NAME)
+                addJavascriptInterface(TokenBridge(deferred, anonymousOk = cookie.isBlank()), BRIDGE_NAME)
 
                 webViewClient = object : WebViewClient() {
                     override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
@@ -185,7 +188,10 @@ internal object SpotifyFreeToken {
     }
 
     /** Receives raw `/api/token` response bodies from the hooked page. */
-    private class TokenBridge(private val deferred: CompletableDeferred<HarvestedToken?>) {
+    private class TokenBridge(
+        private val deferred: CompletableDeferred<HarvestedToken?>,
+        private val anonymousOk: Boolean,
+    ) {
         @JavascriptInterface
         fun onTokenPayload(payload: String?) {
             if (payload.isNullOrBlank() || deferred.isCompleted) return
@@ -197,7 +203,7 @@ internal object SpotifyFreeToken {
                 // The player also mints an anonymous token before the cookie
                 // takes effect; that one can't read canvases, so keep waiting
                 // for the logged-in one.
-                if (token.isNullOrBlank() || anonymous) return
+                if (token.isNullOrBlank() || (anonymous && !anonymousOk)) return
                 val expiresAt = root["accessTokenExpirationTimestampMs"]?.jsonPrimitive?.contentOrNull
                     ?.toLongOrNull()?.takeIf { it > System.currentTimeMillis() }
                     ?: (System.currentTimeMillis() + DEFAULT_TOKEN_LIFETIME_MS)

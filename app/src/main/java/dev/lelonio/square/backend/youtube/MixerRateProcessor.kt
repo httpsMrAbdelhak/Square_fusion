@@ -19,11 +19,7 @@ class MixerRateProcessor : AudioProcessor {
 
     private val sonic = SonicAudioProcessor().apply { setOutputSampleRateHz(PcmMixer.RATE) }
 
-    override fun configure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
-        // Square Fusion: the PCM as it reaches the mixer, for the stream info.
-        dev.lelonio.square.fusion.audio.StreamInspector.onChainConfigured(inputAudioFormat)
-        return sonic.configure(inputAudioFormat)
-    }
+    override fun configure(inputAudioFormat: AudioProcessor.AudioFormat) = sonic.configure(inputAudioFormat)
     override fun isActive() = sonic.isActive
     override fun queueInput(inputBuffer: ByteBuffer) = sonic.queueInput(inputBuffer)
     override fun queueEndOfStream() = sonic.queueEndOfStream()

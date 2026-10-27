@@ -172,7 +172,6 @@ fun HomeScreen(
     onYouTubeSignIn: () -> Unit = {},
     /** Signed out of Spotify: play from the other source instead. */
     onUseYouTube: () -> Unit = {},
-    onSwitchSource: () -> Unit = {},
     /**
      * Spotify's own personalised shelves, empty when the gateway said nothing.
      *
@@ -205,7 +204,6 @@ fun HomeScreen(
             onPlayTrending = onPlayTrending,
             onOpenPlaylist = onOpenPlaylist,
             onOpenSettings = onOpenSettings,
-            onSwitchSource = onSwitchSource,
             onPickChip = onPickYouTubeChip,
             onLoadMore = onLoadMoreYouTube,
             signedIn = youtubeSignedIn,
@@ -320,9 +318,6 @@ fun HomeScreen(
                 Header(
                     name = state.displayName,
                     avatarUrl = state.avatarUrl,
-                    service = R.string.backend_spotify,
-                    serviceIcon = PhosphorIcons.Regular.SpotifyLogo,
-                    onSwitchSource = onSwitchSource,
                     collapse = { collapse },
                     // The chip that is lit is the one that was tapped. It used
                     // to follow whichever section the scroll had reached, which
@@ -620,11 +615,6 @@ private fun Header(
     modifier: Modifier = Modifier,
     name: String,
     avatarUrl: String?,
-    /** Which service the page is showing: see the note on the line it draws. */
-    @StringRes service: Int,
-    /** Its mark, so the source is recognisable before the line is read. */
-    serviceIcon: androidx.compose.ui.graphics.vector.ImageVector,
-    onSwitchSource: () -> Unit,
     /**
      * How far collapsed, as a lambda rather than a value.
      *
@@ -692,61 +682,8 @@ private fun Header(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                // The account, and which service it is an account for.
-                //
-                // Small and above rather than large and below, which is where
-                // the name used to be: whose account it is changes nothing about
-                // the page, while *which service* changes everything on it — the
-                // catalogue, the playlists, what the player can do — and that
-                // was nowhere on screen. Together they read as one line of
-                // provenance over the app's own name.
-                //
-                // Height goes with the alpha, so the collapsed header is a bar
-                // rather than a bar with a blank line in it.
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clickable(
-                            onClickLabel = stringResource(if (service == R.string.backend_spotify) R.string.backend_youtube else R.string.backend_spotify),
-                            onClick = onSwitchSource,
-                        )
-                        .layout { measurable, constraints ->
-                            val placeable = measurable.measure(constraints)
-                            val height = ((1f - collapse()) * placeable.height).toInt()
-                            layout(placeable.width, height) { placeable.place(0, 0) }
-                        }
-                        .graphicsLayer {
-                            clip = true
-                            alpha = (1f - collapse() * 1.6f).coerceIn(0f, 1f)
-                            transformOrigin = TransformOrigin(0f, 0f)
-                        },
-                ) {
-                    Icon(
-                        serviceIcon,
-                        contentDescription = stringResource(service),
-                        tint = InkDim,
-                        modifier = Modifier
-                            .padding(end = 6.dp)
-                            .size(15.dp),
-                    )
-                    Text(
-                        listOfNotNull(
-                            stringResource(service),
-                            name.takeIf { it.isNotBlank() },
-                        ).joinToString(" · "),
-                        modifier = Modifier.weight(1f, fill = false),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = InkDim,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Icon(
-                        PhosphorIcons.Regular.ArrowsLeftRight,
-                        contentDescription = null,
-                        tint = InkDim,
-                        modifier = Modifier.padding(start = 6.dp).size(14.dp),
-                    )
-                }
+                // Square Fusion: YouTube Music is the only service, so the line
+                // that named it and switched to the other one is gone.
                 // The app's own name, at the size the account name used to be.
                 // It is what the page is, and unlike the account it is worth
                 // reading at a glance; it shrinks a little as the header
@@ -1322,7 +1259,6 @@ private fun YouTubeHome(
     onPlayTrending: (List<CatalogTrack>, Int) -> Unit,
     onOpenPlaylist: (CatalogPlaylist) -> Unit,
     onOpenSettings: () -> Unit,
-    onSwitchSource: () -> Unit,
     onPickChip: (dev.lelonio.square.backend.HomeChip?) -> Unit,
     onLoadMore: () -> Unit,
     signedIn: Boolean,
@@ -1356,7 +1292,6 @@ private fun YouTubeHome(
                 // Nothing scrolls under it here, so it stays as it opens.
                 collapse = { 0f },
                 onOpenSettings = onOpenSettings,
-                onSwitchSource = onSwitchSource,
             )
         }
         return
@@ -1381,7 +1316,6 @@ private fun YouTubeHome(
             backdrop = backdrop,
             collapse = { collapse },
             onOpenSettings = onOpenSettings,
-            onSwitchSource = onSwitchSource,
         )
 
         LazyColumn(
@@ -1598,16 +1532,12 @@ private fun YouTubeHeader(
     backdrop: Backdrop,
     collapse: () -> Float,
     onOpenSettings: () -> Unit,
-    onSwitchSource: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Header(
         modifier = modifier,
         name = accountName,
         avatarUrl = null,
-        service = R.string.backend_youtube,
-        serviceIcon = PhosphorIcons.Regular.YoutubeLogo,
-        onSwitchSource = onSwitchSource,
         collapse = collapse,
         highlighted = Feed.entries.first(),
         backdrop = backdrop,

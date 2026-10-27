@@ -176,6 +176,51 @@ object SpotifyFreeLibrary {
         return parseLikedPage(gql("fetchLibraryTracks", LIKED, variables, headers))
     }
 
+    /**
+     * Square Fusion: a playlist's own name, owner and cover, from the first
+     * page of the same query the tracks come from. Throws
+     * [SpotifyPlaylistUnavailable] for a playlist this session cannot read
+     * (private, removed, or a bad id).
+     */
+    suspend fun playlistInfo(playlistId: String): SpotifyPlaylist = withContext(Dispatchers.IO) {
+        val variables = buildJsonObject {
+            put("uri", "spotify:playlist:$playlistId")
+            put("offset", 0)
+            put("limit", 1)
+            put("enableWatchFeedEntrypoint", false)
+        }
+        parsePlaylistInfo(playlistId, gql("fetchPlaylist", PLAYLIST, variables, authHeaders()))
+    }
+
+    /**
+     * Square Fusion: the artists the account follows, through the same library
+     * query as its playlists, filtered to artists.
+     */
+    suspend fun followedArtists(): List<SpotifyArtist> = withContext(Dispatchers.IO) {
+        val headers = authHeaders()
+        val collected = mutableListOf<SpotifyArtist>()
+        var offset = 0
+        while (true) {
+            val variables = buildJsonObject {
+                putJsonArray("filters") { add("Artists") }
+                put("order", null as String?)
+                put("textFilter", "")
+                putJsonArray("features") { add("LIKED_SONGS") }
+                put("limit", 50)
+                put("offset", offset)
+                put("flatten", true)
+                putJsonArray("expandedFolders") {}
+                put("folderUri", null as String?)
+                put("includeFoldersWhenFlattening", false)
+            }
+            val (items, total, raw) = parseArtistPage(gql("libraryV3", LIBRARY, variables, headers))
+            collected += items
+            offset += raw
+            if (raw == 0 || offset >= total) break
+        }
+        collected
+    }
+
     private suspend fun authHeaders(): Map<String, String> {
         val tokens = auth?.tokens()
             ?: throw IllegalStateException("Spotify sign-in expired")
@@ -301,6 +346,49 @@ internal fun parseLikedPage(root: JsonObject): Triple<List<SpotifyTrack>, Int, I
  * sizes in no fixed order — a 60px thumbnail can come last — so the list is
  * read by width rather than by position.
  */
+/** A followed artist. */
+data class SpotifyArtist(val id: String, val name: String, val imageUrl: String?)
+
+/** A playlist this session cannot read: private, removed, or not a playlist at all. */
+class SpotifyPlaylistUnavailable(message: String) : IllegalStateException(message)
+
+internal fun parsePlaylistInfo(playlistId: String, root: JsonObject): SpotifyPlaylist {
+    val playlist = root.obj("data")?.obj("playlistV2")
+        ?: throw SpotifyPlaylistUnavailable("Spotify answered without a playlist")
+    val type = playlist.str("__typename")
+    if (type != null && type != "Playlist") throw SpotifyPlaylistUnavailable("Playlist unavailable ($type)")
+    val name = playlist.str("name").orEmpty()
+    if (name.isBlank()) throw SpotifyPlaylistUnavailable("Playlist unavailable")
+    return SpotifyPlaylist(
+        id = playlistId,
+        name = name,
+        owner = playlist.obj("ownerV2")?.obj("data")?.str("name"),
+        imageUrl = largestSource(playlist.obj("images")),
+    )
+}
+
+internal fun parseArtistPage(root: JsonObject): Triple<List<SpotifyArtist>, Int, Int> {
+    val library = root.obj("data")?.obj("me")?.obj("libraryV3")
+        ?: throw IllegalStateException("Spotify library response was empty")
+    val rawItems = library.arr("items").orEmpty()
+    val items = rawItems.mapNotNull { element ->
+        val wrapper = element.jsonObject.obj("item") ?: return@mapNotNull null
+        val data = wrapper.obj("data") ?: return@mapNotNull null
+        if (data.str("__typename") != "Artist") return@mapNotNull null
+        val uri = wrapper.str("_uri") ?: data.str("uri") ?: return@mapNotNull null
+        val name = data.obj("profile")?.str("name").orEmpty()
+        if (name.isBlank()) return@mapNotNull null
+        SpotifyArtist(
+            id = uri.substringAfterLast(":"),
+            name = name,
+            imageUrl = data.obj("visuals")?.obj("avatarImage")?.arr("sources")
+                ?.mapNotNull { it.jsonObject.str("url")?.let { url -> url to (it.jsonObject.int("width") ?: 0) } }
+                ?.maxByOrNull { it.second }?.first,
+        )
+    }
+    return Triple(items, library.int("totalCount") ?: rawItems.size, rawItems.size)
+}
+
 private fun largestSource(images: JsonObject?): String? =
     images?.arr("items")?.firstOrNull()?.jsonObject?.arr("sources")
         ?.mapNotNull { source ->
