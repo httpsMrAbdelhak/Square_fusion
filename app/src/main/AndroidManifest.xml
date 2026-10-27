@@ -68,12 +68,12 @@
             android:supportsPictureInPicture="true"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboardHidden"
             android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-                <!-- A music player, for whatever lists the phone's music apps. -->
-                <category android:name="android.intent.category.APP_MUSIC" />
-            </intent-filter>
+            <!--
+              Square Fusion: the launcher entry lives on the activity-alias
+              elements below, one per icon, so the icon can be changed without
+              touching this activity. Explicit intents, notifications, media
+              buttons and the links below still reach MainActivity itself.
+            -->
 
             <!--
               Spotify's own scheme. Nothing verifies these, so a phone with both
@@ -107,6 +107,195 @@
                 <data android:scheme="https" android:host="link.tospotify.com" />
             </intent-filter>
         </activity>
+
+
+        <!--
+          The launcher icons. Square's own is the default; the others are
+          BitChord's original variants, switched by AppIcon. Exactly one is
+          enabled at a time. An alias must come after its target activity.
+        -->
+        <activity-alias
+            android:name="dev.lelonio.square.LauncherSquare"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name="dev.lelonio.square.LauncherBitChord"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/bitchord_ic_launcher"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name="dev.lelonio.square.LauncherGlassLight"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_liquid_glass"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name="dev.lelonio.square.LauncherGlassDark"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_liquid_glass_dark"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name="dev.lelonio.square.LauncherGlassClear"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_liquid_glass_clear"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name="dev.lelonio.square.LauncherGlassClearDark"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_liquid_glass_clear_dark"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name="dev.lelonio.square.LauncherSamsungGlass"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_samsung_glass"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name="dev.lelonio.square.LauncherSamsungGlassDark"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_samsung_glass_dark"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name="dev.lelonio.square.LauncherSamsungGlassClear"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_samsung_glass_clear"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name="dev.lelonio.square.LauncherSamsungGlassClearDark"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_samsung_glass_clear_dark"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name="dev.lelonio.square.LauncherPixelGlass"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_pixel_glass"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name="dev.lelonio.square.LauncherPixelGlassDark"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_pixel_glass_dark"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name="dev.lelonio.square.LauncherPixelGlassClear"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_pixel_glass_clear"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name="dev.lelonio.square.LauncherPixelGlassClearDark"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_pixel_glass_clear_dark"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+        </activity-alias>
 
         <!--
           The download of a new version, which has to be allowed to finish:

@@ -108,11 +108,16 @@ object YouTubeDownloads {
         // download anything, signed in or not (#81).
         val source = try {
             val info = StreamInfo.getInfo(ServiceList.YouTube, YouTubeStreams.WATCH_URL + id)
-            val stream = info.audioStreams
-                .filter { !it.content.isNullOrEmpty() }
-                .maxByOrNull { it.averageBitrate }
-                ?: error("no audio for $id")
-            Source(stream.content, stream.format?.suffix ?: "m4a", stream.averageBitrate.takeIf { it > 0 } ?: 0)
+            // Square Fusion: a lossless file from a source that states a
+            // lossless codec and allows downloads, when the user asked for
+            // lossless; YouTube's file below otherwise, as in Square.
+            losslessFromSources(trackUri, info) ?: run {
+                val stream = info.audioStreams
+                    .filter { !it.content.isNullOrEmpty() }
+                    .maxByOrNull { it.averageBitrate }
+                    ?: error("no audio for $id")
+                Source(stream.content, stream.format?.suffix ?: "m4a", stream.averageBitrate.takeIf { it > 0 } ?: 0)
+            }
         } catch (error: Exception) {
             if (!dev.lelonio.square.backend.youtube.SignedInStreams.needsAccount(error)) throw error
             val url = dev.lelonio.square.backend.youtube.SignedInStreams.url(
@@ -134,6 +139,7 @@ object YouTubeDownloads {
                     val request = Request.Builder()
                         .url(source.url)
                         .header("Range", "bytes=$offset-${offset + CHUNK_BYTES - 1}")
+                        .apply { source.headers.forEach { (k, v) -> header(k, v) } }
                         .build()
                     http.newCall(request).execute().use { response ->
                         if (response.code != 200 && response.code != 206) {
@@ -184,7 +190,32 @@ object YouTubeDownloads {
     }
 
     /** Where a song's audio is fetched from, and what it is. */
-    private class Source(val url: String, val extension: String, val kbps: Int)
+    private class Source(
+        val url: String,
+        val extension: String,
+        val kbps: Int,
+        val headers: Map<String, String> = emptyMap(),
+    )
+
+    private fun losslessFromSources(trackUri: String, info: StreamInfo): Source? {
+        val target = dev.lelonio.square.fusion.Fusion.hintFor(trackUri)
+            ?: dev.lelonio.square.fusion.sources.TrackMatcher.Target(
+                title = info.name.orEmpty(),
+                artist = info.uploaderName.orEmpty().removeSuffix(" - Topic"),
+                durationSec = info.duration.takeIf { it > 0 }?.toInt(),
+            )
+        val found = dev.lelonio.square.fusion.Fusion.losslessDownloadBlocking(target) ?: return null
+        val codec = found.format.codec ?: return null
+        val extension = when (codec) {
+            "flac" -> "flac"
+            "wav" -> "wav"
+            "alac" -> "m4a"
+            "aiff" -> "aiff"
+            else -> return null
+        }
+        dev.lelonio.square.fusion.FusionLog.i("download $trackUri: lossless ${found.format.summary} from ${found.sourceName}")
+        return Source(found.url, extension, 0, found.headers)
+    }
 
     private const val PARTIAL = "part"
     private const val READ_TIMEOUT_SECONDS = 30L

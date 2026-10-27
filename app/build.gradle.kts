@@ -202,6 +202,9 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // The real org.json for the JVM tests: android.jar carries only stubs.
     testImplementation("org.json:json:20240303")
+    // Square Fusion: a local HTTP server for the addon and JioSaavn tests.
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     implementation(libs.timber)
     implementation(libs.androidx.core.ktx)
     // Installs baseline-prof.txt on first run, so the code the bar and the

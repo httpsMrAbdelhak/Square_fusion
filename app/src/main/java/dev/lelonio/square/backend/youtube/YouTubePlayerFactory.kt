@@ -74,9 +74,19 @@ object YouTubePlayerFactory {
             )
             .setLooper(host.looper)
             .build()
+            .also { exo -> fusionLevels(exo, slot) }
 
         return buildPlayer(true, mainSlot).let { exo ->
                 exo.addAnalyticsListener(Diagnostics)
+                // Square Fusion: what the decoder really received; see StreamInspector.
+                exo.addAnalyticsListener(dev.lelonio.square.fusion.audio.StreamInspector.listener)
+                dev.lelonio.square.fusion.audio.StreamInspector.mixed = { mainSlot.mixed }
+                dev.lelonio.square.fusion.audio.StreamInspector.mixerRateHz = PcmMixer.RATE
+                exo.addListener(object : Player.Listener {
+                    override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+                        dev.lelonio.square.fusion.audio.StreamInspector.onItem(mediaItem?.mediaId)
+                    }
+                })
                 // A song YouTube plays only to an account, with none signed in:
                 // said, and passed over, rather than left at --:-- with no word
                 // of why. See SignedInStreams.
@@ -146,6 +156,25 @@ object YouTubePlayerFactory {
                 mixer.skipFadeMs = { preferences?.skipFadeMs() ?: 0 }
                 SkipFadePlayer(exo, fades) { preferences?.skipFadeMs() ?: 0 }
             }
+    }
+
+    /**
+     * Square Fusion's loudness normalisation for [exo]'s songs, on its own
+     * slot in the mixer. Level one, and so Square's own sound, while the
+     * setting is off; see fusion.audio.Normalization.
+     */
+    private fun fusionLevels(exo: ExoPlayer, slot: MixerSlot) {
+        val handler = android.os.Handler(exo.applicationLooper)
+        fun apply() {
+            val id = exo.currentMediaItem?.mediaId
+                ?.takeIf { it.startsWith(YouTubeBackend.TRACK_PREFIX) }
+                ?.let(YouTubeBackend::videoIdOfUri)
+            slot.level = dev.lelonio.square.fusion.audio.Normalization.levelFor(id)
+        }
+        exo.addListener(object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) = apply()
+        })
+        dev.lelonio.square.fusion.audio.Normalization.addListener { handler.post { apply() } }
     }
 
     /**
@@ -413,7 +442,25 @@ private class YouTubeStreamResolver(
         if (kept != null && part == null &&
             (!video || dev.lelonio.square.playback.OfflineMode.active.value)
         ) {
+            // A lossless file kept from one of Square Fusion's sources is not
+            // YouTube's file: YouTube's loudness does not describe it.
+            dev.lelonio.square.fusion.audio.Normalization.markSubstituted(
+                YouTubeBackend.videoIdOfUri(base),
+                kept.extension in setOf("flac", "wav", "aiff"),
+            )
             return dataSpec.withUri(android.net.Uri.fromFile(kept))
+        }
+
+        // Square Fusion: a song heard (not watched) may come from one of the
+        // user's sources instead; with none configured this is a no-op, and
+        // any failure leaves the song to YouTube below. See fusion.Fusion.
+        if (!video && part == null && base.startsWith(YouTubeBackend.TRACK_PREFIX)) {
+            val songIdForSources = YouTubeBackend.videoIdOfUri(base)
+            dev.lelonio.square.fusion.audio.Normalization.prefetch(songIdForSources)
+            dev.lelonio.square.fusion.Fusion.substituteBlocking(base, songIdForSources)?.let { found ->
+                return dataSpec.withUri(android.net.Uri.parse(found.url))
+                    .let { if (found.headers.isEmpty()) it else it.withAdditionalHeaders(found.headers) }
+            }
         }
 
         // NewPipe holds its downloader in a static, and every extractor reads it
@@ -523,6 +570,17 @@ private class VideoAwareSourceFactory(
 
     override fun createMediaSource(mediaItem: androidx.media3.common.MediaItem): androidx.media3.exoplayer.source.MediaSource {
         val uri = mediaItem.localConfiguration?.uri?.toString() ?: return base.createMediaSource(mediaItem)
+        // Square Fusion: what the queue knows about the song, for the sources
+        // to match it by; see fusion.Fusion.substituteBlocking.
+        if (uri.startsWith(YouTubeBackend.TRACK_PREFIX)) {
+            val meta = mediaItem.mediaMetadata
+            dev.lelonio.square.fusion.Fusion.hint(
+                uri.substringBefore('#'),
+                meta.title?.toString(),
+                meta.artist?.toString(),
+                meta.durationMs,
+            )
+        }
         val ours = uri.startsWith(YouTubeBackend.TRACK_PREFIX) || uri.startsWith(YouTubeBackend.VIDEO_PREFIX)
         if (!ours || !YouTubeVideoMode.wantsVideo(uri)) return base.createMediaSource(mediaItem)
         fun half(part: String) = progressive.createMediaSource(

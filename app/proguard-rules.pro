@@ -59,3 +59,11 @@
 # Preserve readable line numbers and stack traces in release builds
 -renamesourcefileattribute SourceFile
 -keepattributes SourceFile,LineNumberTable
+
+# Square Fusion: the addon, JioSaavn, Spotify and source-list models are read
+# by kotlinx.serialization.
+-keepclassmembers class dev.lelonio.square.fusion.** {
+    *** Companion;
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keep,includedescriptorclasses class dev.lelonio.square.fusion.**$$serializer { *; }

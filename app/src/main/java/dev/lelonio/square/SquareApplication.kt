@@ -32,6 +32,10 @@ class SquareApplication : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        // Square Fusion's additions; see fusion.Fusion. Contained: a failure
+        // here leaves Square exactly as it was.
+        runCatching { dev.lelonio.square.fusion.Fusion.init(this) }
+            .onFailure { android.util.Log.w("SquareFusion", "init failed", it) }
         // First, so a crash anywhere below is written down; see Report.
         dev.lelonio.square.diagnostics.Report.install(this)
         // Temporary, dev builds only; see WidevineProbe.
