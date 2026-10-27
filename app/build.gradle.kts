@@ -62,6 +62,9 @@ android {
             "\"${(project.findProperty("sourceCommit") as String?) ?: "local"}\"",
         )
         buildConfigField("boolean", "VERBOSE_LOG", "false")
+        // Square Fusion's instrumented tests (app/src/androidTest), run on an
+        // emulator by the CI against the debug build.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Square's updater installs Square's own releases, which carry the
         // original application id; see Updater.check.
         buildConfigField("boolean", "SELF_UPDATE", "false")
@@ -203,6 +206,12 @@ dependencies {
     // The real org.json for the JVM tests: android.jar carries only stubs.
     testImplementation("org.json:json:20240303")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     implementation(libs.timber)
     implementation(libs.androidx.core.ktx)
     // Installs baseline-prof.txt on first run, so the code the bar and the

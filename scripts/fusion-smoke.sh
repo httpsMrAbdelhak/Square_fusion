@@ -44,21 +44,34 @@ step "open.spotify.com link"
 adb shell am start -W -a android.intent.action.VIEW -d "https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT" -p "$PKG" | tail -n 3
 check_alive deeplink-web
 
-step "every icon alias"
-ALIASES="LauncherBitChord LauncherGlassLight LauncherGlassDark LauncherGlassClear LauncherGlassClearDark LauncherSamsungGlass LauncherSamsungGlassDark LauncherSamsungGlassClear LauncherSamsungGlassClearDark LauncherPixelGlass LauncherPixelGlassDark LauncherPixelGlassClear LauncherPixelGlassClearDark LauncherSquare"
-prev=LauncherSquare
-for a in $ALIASES; do
-  # What AppIcon.apply does: the new one on, then the previous one off.
-  adb shell pm enable "$PKG/dev.lelonio.square.$a" > /dev/null
-  adb shell pm disable "$PKG/dev.lelonio.square.$prev" > /dev/null 2>&1 || true
-  entries=$(adb shell cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER | grep -c "$PKG")
-  adb shell am force-stop "$PKG"
-  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
-  if [ "$entries" = "1" ] && sleep 6 && adb shell pidof "$PKG" > /dev/null; then echo "OK   icon $a"; else echo "FAIL icon $a (launcher entries: $entries)"; fail=1; fi
-  prev=$a
-done
-# Back on Square: the manifest default.
-adb shell pm enable "$PKG/dev.lelonio.square.LauncherSquare" > /dev/null
+# The icon aliases are switched by the app itself (AppIcon.apply); the shell
+# may not change another app's components, so that is checked by the
+# instrumented tests (FusionDeviceTest, FusionScreensTest) instead.
+
+step "onboarding: choose YouTube Music"
+tap_text() {
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
+  adb pull /sdcard/ui.xml "$OUT/ui.xml" > /dev/null 2>&1 || return 1
+  local b
+  b=$(python3 - "$OUT/ui.xml" "$1" <<'PY'
+import re, sys
+xml = open(sys.argv[1], encoding="utf-8").read()
+for m in re.finditer(r'<node [^>]*>', xml):
+    n = m.group(0)
+    if f'text="{sys.argv[2]}"' in n or f'content-desc="{sys.argv[2]}"' in n:
+        x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n).groups())
+        print((x1 + x2) // 2, (y1 + y2) // 2)
+        break
+PY
+)
+  [ -n "$b" ] || return 1
+  adb shell input tap $b
+}
+if tap_text "YouTube Music"; then
+  check_alive youtube-home 25
+else
+  echo "WARN onboarding card not found (layout or language differs)"
+fi
 
 step "background and back"
 adb shell input keyevent KEYCODE_HOME
