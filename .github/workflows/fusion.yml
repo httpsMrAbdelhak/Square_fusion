@@ -98,6 +98,14 @@ jobs:
                 -keyalg RSA -keysize 2048 -validity 10000 \
                 -dname "CN=Square Fusion CI,O=Square Fusion,C=US"
             fi
+            # Named explicitly: left to itself, the Android Gradle plugin
+            # signs with a debug key of its own, new on every runner.
+            {
+              echo "storeFile=$HOME/.android/debug.keystore"
+              echo "storePassword=android"
+              echo "keyAlias=androiddebugkey"
+              echo "keyPassword=android"
+            } > keystore.properties
             echo "SIGNED_WITH=CI fallback key (no signing secrets set)" >> "$GITHUB_ENV"
           fi
 
@@ -204,6 +212,11 @@ jobs:
           if [ -z "$old" ] || [ "$old" = "$new" ]; then
             echo "same=true" >> "$GITHUB_OUTPUT"
             echo "- Signing key: same as the published APK" >> "$GITHUB_STEP_SUMMARY"
+          elif grep -qx "$old" .github/retired-signing-certs.txt 2>/dev/null; then
+            # A key change decided in the repository, see that file.
+            echo "same=true" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Signing key replaced::The published APK's key ($old) is retired; this APK cannot be installed over it."
+            echo "- Signing key: replaces the retired key of the published APK" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "same=false" >> "$GITHUB_OUTPUT"
             echo "::warning title=Signing key changed::This APK is not signed with the published APK's key ($old). It cannot be installed over it; publishing is held back unless allow_new_signature is set."

@@ -31,7 +31,8 @@ env:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    # The same image as fusion.yml's build, whose cache entries it keeps.
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4

@@ -1,0 +1,8 @@
+# Signing certificates (SHA-256) of published APKs that are no longer used.
+# fusion.yml publishes an APK signed with another key than the published one
+# only when the published one's certificate is listed here.
+#
+# Builds 1 to 13 were each signed with a different, throwaway debug key (the
+# Android Gradle plugin's own, not the cached fallback key), so none of them
+# can be updated in place; build 13's is retired here.
+139ec114c7aa3b2a04f2bc796325036d26f75a2da169684a184032e928b18d51
