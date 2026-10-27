@@ -202,7 +202,7 @@ jobs:
   smoke:
     needs: apk
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -232,7 +232,7 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash -c 'set -o pipefail; bash scripts/fusion-smoke.sh "$(ls square-fusion-*-universal.apk | head -n 1)" 2>&1 | tee smoke-log.txt; s1=$?; bash scripts/fusion-instrumented.sh instrumented 2>&1 | tee instrumented-log.txt; s2=$?; [ $s1 = 0 ] && [ $s2 = 0 ]'
+          script: bash -c 'set -o pipefail; bash scripts/fusion-smoke.sh "$(ls square-fusion-*-universal.apk | head -n 1)" 2>&1 | tee smoke-log.txt; s1=$?; bash scripts/fusion-instrumented.sh instrumented 2>&1 | tee instrumented-log.txt; s2=$?; (python3 scripts/fake-addon.py &) ; sleep 2; bash scripts/fusion-playback.sh 2>&1 | tee playback-log.txt; s3=$?; [ $s1 = 0 ] && [ $s2 = 0 ] && [ $s3 = 0 ]'
 
       - name: Attach results to the release
         if: always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -241,9 +241,10 @@ jobs:
         run: |
           [ -f smoke-log.txt ] && cp smoke-log.txt smoke/ 2>/dev/null || true
           if [ -d smoke ]; then
-            zip -qr smoke-results.zip smoke smoke-log.txt instrumented-log.txt || true
+            zip -qr smoke-results.zip smoke smoke-log.txt instrumented-log.txt playback playback-log.txt fake-addon.log || true
             gh release upload "fusion-${{ needs.apk.outputs.build }}" smoke-results.zip smoke-log.txt --clobber || true
             [ -f instrumented-log.txt ] && gh release upload "fusion-${{ needs.apk.outputs.build }}" instrumented-log.txt --clobber || true
+            [ -f playback-log.txt ] && gh release upload "fusion-${{ needs.apk.outputs.build }}" playback-log.txt --clobber || true
           fi
 
       - uses: actions/upload-artifact@v4
@@ -254,4 +255,7 @@ jobs:
             smoke/
             smoke-log.txt
             instrumented-log.txt
+            playback/
+            playback-log.txt
+            fake-addon.log
           if-no-files-found: ignore

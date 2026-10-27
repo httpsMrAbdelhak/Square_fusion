@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug build only: lets the emulator test reach the local test addon over
+  plain HTTP at the host's address. Release builds keep Android's default,
+  which refuses cleartext traffic, so addons must be served over HTTPS.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:networkSecurityConfig="@xml/fusion_debug_network" />
+</manifest>
