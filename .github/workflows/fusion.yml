@@ -65,6 +65,7 @@ jobs:
       # The fallback key, shared between runs through the cache so an APK
       # from one build installs over the one before it.
       - name: Restore fallback signing key
+        id: keycache
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
@@ -195,6 +196,7 @@ jobs:
             old=""
           fi
           echo "new $new"
+          echo "::notice title=Signing::$SIGNED_WITH; fallback key cache hit: ${{ steps.keycache.outputs.cache-hit }}; certificate SHA-256 $new"
           echo "published ${old:-none}"
           if [ -z "$old" ] || [ "$old" = "$new" ]; then
             echo "same=true" >> "$GITHUB_OUTPUT"
@@ -262,6 +264,25 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: bash -c 'set -o pipefail; bash scripts/fusion-smoke.sh "$(ls square-fusion-*-universal.apk | head -n 1)" 2>&1 | tee smoke-log.txt; s1=$?; bash scripts/fusion-instrumented.sh instrumented 2>&1 | tee instrumented-log.txt; s2=$?; bash scripts/fusion-playback.sh 2>&1 | tee playback-log.txt; s3=$?; [ $s1 = 0 ] && [ $s2 = 0 ] && [ $s3 = 0 ]'
+
+      # The results as annotations on the run page, readable without
+      # downloading the artifact.
+      - name: Summarise emulator results
+        if: always()
+        run: |
+          for log in smoke-log.txt instrumented-log.txt playback-log.txt; do
+            [ -f "$log" ] || { echo "::warning title=$log::missing"; continue; }
+            level=notice
+            grep -qE "^FAIL|FAILURES|Process crashed|INSTRUMENTATION_FAILED" "$log" && level=error
+            grep -E "^(OK|FAIL|WARN) |^== |result|FAILURES|Tests run|OK \\(|^[a-zA-Z.]+Test[#:]|Process crashed|stack=|class=|test=" "$log" | head -n 90 > "$RUNNER_TEMP/lines.txt" || true
+            split -l 30 "$RUNNER_TEMP/lines.txt" "$RUNNER_TEMP/part-"
+            for part in "$RUNNER_TEMP"/part-*; do
+              [ -f "$part" ] || continue
+              msg=$(sed 's/%/%25/g' "$part" | awk '{printf "%s%%0A", $0}')
+              echo "::$level title=$log::$msg"
+              rm "$part"
+            done
+          done
 
       - uses: actions/upload-artifact@v4
         if: always()
