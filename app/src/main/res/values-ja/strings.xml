@@ -3,7 +3,7 @@
     アプリ内に表示する日本語テキスト。
 -->
 <resources>
-    <string name="app_name">Square</string>
+    <string name="app_name">Square Fusion</string>
 
     <!-- Shared -->
     <string name="back">戻る</string>

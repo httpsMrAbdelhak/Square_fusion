@@ -46,13 +46,25 @@ android {
     ndkVersion = ndkVersionForCargo
 
     defaultConfig {
-        applicationId = "dev.lelonio.square"
+        // Square Fusion installs beside Square: its own id, so the two never
+        // replace each other and neither one's data is touched by the other.
+        applicationId = "dev.lelonio.square.fusion"
         // cpal's Android host is AAudio, which the ndk crate gates at API 26.
         minSdk = 26
         targetSdk = 35
-        versionCode = 60
-        versionName = "2.6.3"
+        // Square's own version, with the CI run that built it: every APK
+        // names the build it came from, and each one installs over the last.
+        val fusionBuild = (project.findProperty("fusionBuild") as String?)?.toIntOrNull() ?: 0
+        versionCode = 60_000 + fusionBuild
+        versionName = "2.6.3-fusion.$fusionBuild"
+        buildConfigField(
+            "String", "SOURCE_COMMIT",
+            "\"${(project.findProperty("sourceCommit") as String?) ?: "local"}\"",
+        )
         buildConfigField("boolean", "VERBOSE_LOG", "false")
+        // Square's updater installs Square's own releases, which carry the
+        // original application id; see Updater.check.
+        buildConfigField("boolean", "SELF_UPDATE", "false")
 
         // Bungee only for the ABIs that ship; see the splits below.
         externalNativeBuild {

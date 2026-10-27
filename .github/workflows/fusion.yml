@@ -1,0 +1,152 @@
+name: Square Fusion APK
+
+# Every push to main builds, tests and publishes an installable APK.
+#
+# The APK lands in two places:
+#  - the workflow run's artifacts (needs a GitHub login to download), and
+#  - a GitHub pre-release named after the build, plus the rolling "latest"
+#    release, whose assets are plain links a phone can open directly.
+#
+# Signing: with the four SIGNING_* secrets set, the release key from those
+# secrets. Without them, a debug key kept in the Actions cache so successive
+# builds share it and install over one another. See docs/FUSION.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fusion-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+
+      - name: Build identity
+        id: id
+        run: |
+          echo "build=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "short=$(git rev-parse --short=10 HEAD)" >> "$GITHUB_OUTPUT"
+          echo "version=2.6.3-fusion.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      # The fallback key, shared between runs through the cache so an APK
+      # from one build installs over the one before it.
+      - name: Restore fallback signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: fusion-debug-keystore-v1
+
+      - name: Signing key
+        env:
+          KEYSTORE: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/fusion-release.jks"
+            {
+              echo "storeFile=$RUNNER_TEMP/fusion-release.jks"
+              echo "storePassword=$STORE_PASSWORD"
+              echo "keyAlias=$KEY_ALIAS"
+              echo "keyPassword=$KEY_PASSWORD"
+            } > keystore.properties
+            echo "SIGNED_WITH=release key (repository secrets)" >> "$GITHUB_ENV"
+          else
+            mkdir -p ~/.android
+            if [ ! -f ~/.android/debug.keystore ]; then
+              keytool -genkeypair -v -keystore ~/.android/debug.keystore \
+                -storepass android -alias androiddebugkey -keypass android \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Square Fusion CI,O=Square Fusion,C=US"
+            fi
+            echo "SIGNED_WITH=CI fallback key (no signing secrets set)" >> "$GITHUB_ENV"
+          fi
+
+      - name: Unit tests
+        run: ./gradlew :app:testDevUnitTest --stacktrace -PfusionBuild=${{ steps.id.outputs.build }}
+
+      - name: Build release APK
+        run: >
+          ./gradlew :app:assembleRelease --stacktrace
+          -PfusionBuild=${{ steps.id.outputs.build }}
+          -PsourceCommit=${{ steps.id.outputs.sha }}
+
+      - name: Verify APK
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/release/app-universal-release.apk
+          test -s "$apk"
+          bt="$ANDROID_HOME/build-tools/36.0.0"
+          "$bt/apksigner" verify --verbose --print-certs "$apk" | tee "$RUNNER_TEMP/signature.txt"
+          badging=$("$bt/aapt2" dump badging "$apk")
+          echo "$badging" | head -n 3
+          echo "$badging" | grep -q "package: name='dev.lelonio.square.fusion'"
+          echo "$badging" | grep -q "versionName='${{ steps.id.outputs.version }}'"
+          unzip -l "$apk" | grep -q "lib/arm64-v8a/libsquarecore.so"
+          for abi in arm64-v8a armeabi-v7a universal; do
+            cp "app/build/outputs/apk/release/app-$abi-release.apk" "square-fusion-${{ steps.id.outputs.version }}-$abi.apk"
+          done
+          cp "$apk" square-fusion.apk
+          sha256sum square-fusion*.apk | tee SHA256SUMS.txt
+          {
+            echo "## Square Fusion ${{ steps.id.outputs.version }}"
+            echo
+            echo "- Commit: \`${{ steps.id.outputs.sha }}\`"
+            echo "- Signed with: $SIGNED_WITH"
+            echo
+            echo '```'
+            cat SHA256SUMS.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: square-fusion-${{ steps.id.outputs.version }}-${{ steps.id.outputs.short }}
+          path: |
+            square-fusion-*.apk
+            SHA256SUMS.txt
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="fusion-${{ steps.id.outputs.build }}"
+          notes="Square Fusion ${{ steps.id.outputs.version }}
+          Built from commit ${{ steps.id.outputs.sha }} by run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Signed with: $SIGNED_WITH
+          Install square-fusion.apk (universal) or the file for your phone's ABI. It installs beside Square and does not replace it."
+          gh release create "$tag" square-fusion*.apk SHA256SUMS.txt \
+            --target "${{ steps.id.outputs.sha }}" --prerelease \
+            --title "Square Fusion ${{ steps.id.outputs.version }}" --notes "$notes"
+          # The rolling release whose asset URL never changes.
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest square-fusion.apk SHA256SUMS.txt \
+            --target "${{ steps.id.outputs.sha }}" --latest \
+            --title "Square Fusion (latest: ${{ steps.id.outputs.version }})" --notes "$notes"
+
+      - name: Upload reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-reports-${{ steps.id.outputs.short }}
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore

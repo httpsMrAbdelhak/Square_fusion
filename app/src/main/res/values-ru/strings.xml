@@ -4,7 +4,7 @@
     base the rest of the locales fall back to.
 -->
 <resources>
-    <string name="app_name">Square</string>
+    <string name="app_name">Square Fusion</string>
 
     <!-- Shared -->
     <string name="back">Назад</string>

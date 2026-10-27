@@ -81,6 +81,13 @@ class Updater(context: Context) {
      * button is pressed and at no other time.
      */
     suspend fun check() {
+        // Square Fusion installs beside Square under its own application id.
+        // The official releases carry Square's id, so offering them here would
+        // install or replace the original app rather than update this one.
+        if (!BuildConfig.SELF_UPDATE) {
+            _state.value = State.Idle
+            return
+        }
         _state.value = State.Checking
         val result = runCatching { withContext(Dispatchers.IO) { latestRelease() } }
             .getOrElse {

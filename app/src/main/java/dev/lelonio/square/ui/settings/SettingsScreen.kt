@@ -882,7 +882,7 @@ fun SettingsScreen(
 
         // The update on its own, never folded away: the one thing on this
         // page somebody comes to do rather than to read.
-        if (shown == SettingsPage.About) item("update") {
+        if (shown == SettingsPage.About && BuildConfig.SELF_UPDATE) item("update") {
             Section(null) {
                 UpdateRow(askToInstall)
             }

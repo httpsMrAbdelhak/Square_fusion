@@ -8,7 +8,7 @@
     values-it.
 -->
 <resources>
-    <string name="app_name">Square</string>
+    <string name="app_name">Square Fusion</string>
 
     <!-- Shared -->
     <string name="back">Back</string>
