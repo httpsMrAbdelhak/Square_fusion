@@ -136,9 +136,21 @@ synchronisation quotidienne relit ce cache pour qu'il n'expire pas (GitHub
 efface une entrée inutilisée pendant 7 jours). Aucune clé n'est écrite dans le
 dépôt.
 
+**Builds 1 à 13 :** chacun a été signé avec une clé jetable différente (le
+plugin Android utilisait sa propre clé de debug, pas la clé mise en cache).
+Aucun ne peut donc être mis à jour sur place : passer au build actuel demande
+de désinstaller **Square Fusion** une fois (pas Square), ce qui efface ses
+réglages et sa connexion YouTube. Les builds suivants sont signés avec la clé
+mise en cache et s'installent l'un sur l'autre.
+
 Avant de publier, le workflow compare le certificat du nouvel APK à celui de
 l'APK publié ; s'ils diffèrent, la publication est bloquée (une mise à jour
-serait refusée par Android) sauf lancement manuel avec `allow_new_signature`.
+serait refusée par Android), sauf lancement manuel avec `allow_new_signature`
+ou si l'ancien certificat est listé dans `.github/retired-signing-certs.txt`.
+
+La clé de secours est lisible par tout workflow du dépôt, y compris celui
+d'une pull request venue d'un fork, si vous l'approuvez. Pour une clé que vous
+seul détenez, utilisez les secrets (voir « Étape facultative »).
 
 L'identifiant reste `dev.lelonio.square.fusion` : Square officiel est signé par
 la clé de son auteur, une autre clé ne peut donc pas le mettre à jour sans le
