@@ -18,7 +18,7 @@ name: Square Fusion APK
 # builds share it and install over one another. See docs/FUSION.md.
 on:
   push:
-    branches: [main, cleanup]
+    branches: [main, 'cleanup*']
   pull_request:
   workflow_dispatch:
     inputs:
@@ -37,7 +37,10 @@ concurrency:
 
 jobs:
   apk:
-    runs-on: ubuntu-latest
+    # Pinned: the fallback signing key is kept in the Actions cache, whose
+    # entries are tied to the runner's compression tools. A different image
+    # would miss the key and sign with a new one.
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     outputs:
       version: ${{ steps.id.outputs.version }}
