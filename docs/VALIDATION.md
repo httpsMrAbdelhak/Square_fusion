@@ -61,7 +61,7 @@ Music) ; fréquences lues sur le vrai écran.
 | Premier lancement : pas de choix Spotify | OK |
 | Accueil : plus de sélecteur de source | OK |
 | Bibliothèque › + › Importer une playlist › lien public › Importer | OK : « Today's Top Hits », 50 titres |
-| Lecture : le premier titre demandé est le premier de la playlist | voir le dernier run |
+| Lecture : le premier titre demandé est le premier de la playlist (ordre conservé) | OK |
 | Correspondance sur YouTube Music | OK (ex. « Manchild », Sabrina Carpenter → `DntZ3-yCaFs`) |
 | Son réellement joué | **non vérifiable ici** : YouTube refuse les flux anonymes au réseau du runner ; l'application ne plante pas |
 
