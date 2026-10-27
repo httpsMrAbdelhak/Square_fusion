@@ -29,11 +29,23 @@ internal class TouchRefreshRate(private val activity: Activity) {
     /** The mode last written to the window, so it is not rewritten. */
     private var requested = NO_PREFERENCE
 
-    /** Asks for the fastest mode; called as the app comes on screen. */
-    fun hold() = request(fastestMode())
+    /**
+     * Asks for the fastest mode; called as the app comes on screen.
+     *
+     * Square Fusion: with "Choose the rate" switched on in Performance, the
+     * mode at the chosen rate instead; see fusion.display.RefreshRates. Off,
+     * which is the default, this is Square's own behaviour unchanged.
+     */
+    fun hold() {
+        live = this
+        request(dev.lelonio.square.fusion.display.RefreshRates.chosenMode(display()) ?: fastestMode())
+    }
 
     /** Lets the mode go, for an activity that is leaving the screen. */
-    fun reset() = request(NO_PREFERENCE)
+    fun reset() {
+        if (live === this) live = null
+        request(NO_PREFERENCE)
+    }
 
     /**
      * The fastest mode at the resolution the screen is using now: a mode at
@@ -69,7 +81,16 @@ internal class TouchRefreshRate(private val activity: Activity) {
         window.attributes = attributes
     }
 
-    private companion object {
-        const val NO_PREFERENCE = 0
+    companion object {
+        private const val NO_PREFERENCE = 0
+
+        /** The instance holding the window now, for a setting that changed while on screen. */
+        @Volatile
+        private var live: TouchRefreshRate? = null
+
+        /** Asks again with the current settings. Main thread. */
+        fun reapply() {
+            live?.hold()
+        }
     }
 }

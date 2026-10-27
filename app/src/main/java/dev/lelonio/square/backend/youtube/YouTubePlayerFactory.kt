@@ -74,7 +74,7 @@ object YouTubePlayerFactory {
             )
             .setLooper(host.looper)
             .build()
-            .also { exo -> fusionLevels(exo, slot) }
+            .also { exo -> fusionLevels(exo, slot, lateLoudness = handleFocus) }
 
         return buildPlayer(true, mainSlot).let { exo ->
                 exo.addAnalyticsListener(Diagnostics)
@@ -163,18 +163,21 @@ object YouTubePlayerFactory {
      * slot in the mixer. Level one, and so Square's own sound, while the
      * setting is off; see fusion.audio.Normalization.
      */
-    private fun fusionLevels(exo: ExoPlayer, slot: MixerSlot) {
+    private fun fusionLevels(exo: ExoPlayer, slot: MixerSlot, lateLoudness: Boolean) {
         val handler = android.os.Handler(exo.applicationLooper)
-        fun apply() {
+        fun update() {
             val id = exo.currentMediaItem?.mediaId
                 ?.takeIf { it.startsWith(YouTubeBackend.TRACK_PREFIX) }
                 ?.let(YouTubeBackend::videoIdOfUri)
             slot.level = dev.lelonio.square.fusion.audio.Normalization.levelFor(id)
         }
         exo.addListener(object : Player.Listener {
-            override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) = apply()
+            override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) = update()
         })
-        dev.lelonio.square.fusion.audio.Normalization.addListener { handler.post { apply() } }
+        // A loudness that arrives after the song started, for the main player
+        // only: it lives as long as the app, where the crossfade's tail
+        // players come and go.
+        if (lateLoudness) dev.lelonio.square.fusion.audio.Normalization.addListener { handler.post { update() } }
     }
 
     /**

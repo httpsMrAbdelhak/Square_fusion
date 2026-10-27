@@ -2008,6 +2008,12 @@ fun SquareApp(
                                     viewModel.refresh()
                                     viewModel.loadYouTubeHome(force = true)
                                 },
+                                // Square Fusion: a song from the Spotify
+                                // library, looked up on the search page.
+                                onSearchOnYouTube = { query ->
+                                    viewModel.onSearchQuery(query)
+                                    navController.switchTab(Routes.SEARCH)
+                                },
                             )
                         }
 

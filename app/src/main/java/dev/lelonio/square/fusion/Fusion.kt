@@ -61,6 +61,8 @@ object Fusion {
         AudioGates.atmosDecoder = { DeviceCodecs.playsDolbyAtmos }
         Normalization.enabled = { settings.normalization.value }
         Normalization.fetch = ::youtubeLoudness
+        runCatching { dev.lelonio.square.fusion.spotify.SpotifyFreeAccount.init(appContext) }
+            .onFailure { FusionLog.w("Spotify library unavailable: ${it.message}") }
     }
 
     /** Called by the player as items are queued. */

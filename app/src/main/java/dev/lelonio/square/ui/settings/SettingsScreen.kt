@@ -153,6 +153,8 @@ fun SettingsScreen(
     onYouTubeSignIn: () -> Unit = {},
     /** After switching channel: the library and the home belong to the new one. */
     onYouTubeChannelChange: () -> Unit = {},
+    /** Square Fusion: a Spotify song looked up on YouTube Music's search. */
+    onSearchOnYouTube: (String) -> Unit = {},
 ) {
     val ready = state as? MainViewModel.UiState.Ready
     val context = LocalContext.current
@@ -302,6 +304,33 @@ fun SettingsScreen(
         )
         return@AnimatedContent
     }
+    when (shown) {
+        SettingsPage.Sources -> {
+            FusionSourcesPage(contentPadding = contentPadding, header = { heading(shown) })
+            return@AnimatedContent
+        }
+        SettingsPage.StreamInfo -> {
+            FusionStreamInfoPage(contentPadding = contentPadding, header = { heading(shown) })
+            return@AnimatedContent
+        }
+        SettingsPage.SpotifyLogin -> {
+            SpotifyFreeLoginPage(
+                header = { heading(shown) },
+                contentPadding = contentPadding,
+                onDone = { goTo(SettingsPage.SpotifyLibrary) },
+            )
+            return@AnimatedContent
+        }
+        SettingsPage.SpotifyLibrary -> {
+            SpotifyFreeLibraryPage(
+                contentPadding = contentPadding,
+                header = { heading(shown) },
+                onSearch = onSearchOnYouTube,
+            )
+            return@AnimatedContent
+        }
+        else -> Unit
+    }
 
     // Every group folded when a page opens: the headings are the page's
     // contents, and only the group asked for opens.
@@ -441,6 +470,14 @@ fun SettingsScreen(
             )
         }
 
+        // Square Fusion: a Spotify library (free accounts too), for browsing only.
+        if (shown == SettingsPage.Account) item("fusion-spotify") {
+            SpotifyFreeSection(
+                onSignIn = { goTo(SettingsPage.SpotifyLogin) },
+                onOpenLibrary = { goTo(SettingsPage.SpotifyLibrary) },
+            )
+        }
+
         // What is kept on the phone. Under Playback rather than Account: it is
         // about how the music arrives, and it belongs beside the bitrate it
         // shares its wording with.
@@ -467,6 +504,15 @@ fun SettingsScreen(
         // YouTube Music's own, in the place Spotify's quality has.
         if (shown == SettingsPage.Playback && !showSpotify && "sound" in openGroups) groupItem("youtube-quality", Group.SOUND) {
             YouTubeQualitySection()
+        }
+
+        // Square Fusion: what the addon sources are asked for, beside YouTube's own.
+        if (shown == SettingsPage.Playback && !showSpotify && "sound" in openGroups) groupItem("fusion-quality", Group.SOUND) {
+            FusionQualitySection(
+                backdrop = backdrop,
+                onOpenSources = { goTo(SettingsPage.Sources) },
+                onOpenStreamInfo = { goTo(SettingsPage.StreamInfo) },
+            )
         }
 
         // The effects run on our own output, so this one holds for both backends.
@@ -787,6 +833,19 @@ fun SettingsScreen(
 
         if (shown == SettingsPage.App && "system" in openGroups) groupEnd(Group.SYSTEM)
 
+        // Square Fusion: the launcher icon, and the refresh rate.
+        if (shown == SettingsPage.App) groupHeading(Group.ICON, open = "fusion-icon" in openGroups) { toggleGroup("fusion-icon") }
+        if (shown == SettingsPage.App && "fusion-icon" in openGroups) groupItem("fusion-icon", Group.ICON) {
+            AppIconSection()
+        }
+        if (shown == SettingsPage.App && "fusion-icon" in openGroups) groupEnd(Group.ICON)
+
+        if (shown == SettingsPage.App) groupHeading(Group.PERFORMANCE, open = "fusion-performance" in openGroups) { toggleGroup("fusion-performance") }
+        if (shown == SettingsPage.App && "fusion-performance" in openGroups) groupItem("fusion-performance", Group.PERFORMANCE) {
+            PerformanceSection(backdrop)
+        }
+        if (shown == SettingsPage.App && "fusion-performance" in openGroups) groupEnd(Group.PERFORMANCE)
+
         if (shown == SettingsPage.About) item("author") {
             Section(stringResource(R.string.developed_by)) {
                 val uriHandler = LocalUriHandler.current
@@ -1013,7 +1072,21 @@ private enum class SettingsPage(
     Downloads(R.string.page_downloads, R.string.page_downloads_summary, PhosphorIcons.Regular.DownloadSimple),
     App(R.string.page_app, R.string.page_app_summary, PhosphorIcons.Regular.SlidersHorizontal),
     About(R.string.about, R.string.page_about_summary, PhosphorIcons.Regular.Info),
+
+    // Square Fusion's own pages, opened from rows inside the pages above and
+    // never shown as tiles of the index; see FUSION_PAGES.
+    Sources(R.string.fusion_sources_title, R.string.fusion_sources_summary, PhosphorIcons.Regular.HardDrives),
+    StreamInfo(R.string.fusion_stream_info_title, R.string.fusion_stream_info_summary, PhosphorIcons.Regular.Info),
+    SpotifyLogin(R.string.fusion_spotify_sign_in, R.string.fusion_spotify_library, PhosphorIcons.Regular.UserCircle),
+    SpotifyLibrary(R.string.fusion_spotify_library, R.string.fusion_spotify_browse, PhosphorIcons.Regular.UserCircle),
 }
+
+private val FUSION_PAGES = setOf(
+    SettingsPage.Sources,
+    SettingsPage.StreamInfo,
+    SettingsPage.SpotifyLogin,
+    SettingsPage.SpotifyLibrary,
+)
 
 /** How long a page takes to arrive, and how quickly the last one goes. */
 private const val PAGE_TRAVEL_MS = 260
@@ -1088,7 +1161,7 @@ private fun SettingsIndex(
         // it is an offer rather than a setting — asking louder than that would
         // be asking on a screen somebody opened to change something.
         val uriHandler = LocalUriHandler.current
-        val pages = SettingsPage.entries.filter { it != SettingsPage.Account }
+        val pages = SettingsPage.entries.filter { it != SettingsPage.Account && it !in FUSION_PAGES }
         val rows = pages.chunked(2)
         rows.forEachIndexed { index, pair ->
             val last = index == rows.lastIndex
@@ -2073,7 +2146,7 @@ private fun DownloadsSection(backdrop: Backdrop) {
 }
 
 @Composable
-private fun DownloadSwitch(
+internal fun DownloadSwitch(
     label: String,
     checked: Boolean,
     backdrop: Backdrop,
@@ -2096,7 +2169,7 @@ private fun DownloadSwitch(
 }
 
 @Composable
-private fun Section(title: String?, content: @Composable () -> Unit) {
+internal fun Section(title: String?, content: @Composable () -> Unit) {
     // Under a group of the same name, said once, by the group.
     val group = LocalGroupTitle.current
     Column(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
@@ -2137,6 +2210,8 @@ private enum class Group(@StringRes val title: Int, @StringRes val summary: Int,
     ABOUT(R.string.about, R.string.settings_group_about_summary, PhosphorIcons.Regular.Info),
     HELP(R.string.help_feedback, R.string.settings_group_help_summary, PhosphorIcons.Regular.Lifebuoy),
     PERMISSIONS(R.string.permissions_asked, R.string.settings_group_permissions_summary, PhosphorIcons.Regular.ShieldCheck),
+    ICON(R.string.fusion_app_icon, R.string.fusion_app_icon_summary, PhosphorIcons.Regular.Image),
+    PERFORMANCE(R.string.fusion_performance, R.string.fusion_performance_summary, PhosphorIcons.Regular.BatteryCharging),
 }
 
 /** The group a section is drawn in, whose heading it then does not repeat; see Section. */
@@ -2268,7 +2343,7 @@ private fun LazyListScope.groupItem(key: String, group: Group, content: @Composa
     }
 
 @Composable
-private fun InfoRow(label: String, value: String, icon: ImageVector? = null) {
+internal fun InfoRow(label: String, value: String, icon: ImageVector? = null) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -2340,7 +2415,7 @@ private fun ReportRows(name: String?, onSave: (java.io.File) -> Unit) {
 }
 
 @Composable
-private fun ActionRow(
+internal fun ActionRow(
     label: String,
     destructive: Boolean,
     icon: ImageVector? = null,
@@ -2380,7 +2455,7 @@ private fun ActionRow(
 
 /** A row of a list where one is picked, with a tick on the one that is. */
 @Composable
-private fun ChoiceRow(
+internal fun ChoiceRow(
     label: String,
     selected: Boolean,
     icon: ImageVector? = null,
@@ -2413,7 +2488,7 @@ private fun ChoiceRow(
 }
 
 @Composable
-private fun RowDivider() {
+internal fun RowDivider() {
     Box(
         Modifier
             .fillMaxWidth()
