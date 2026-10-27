@@ -173,10 +173,16 @@ if [ "$imported" = 1 ]; then
   dump playlist
   shot playlist
   adb logcat -c
-  tap_where playlist '(desc.lower() in ("play", "shuffle") or text.lower() in ("play", "shuffle")) and clickable' \
-    || tap_where playlist2 'desc.lower() in ("play", "shuffle") or text.lower() in ("play", "shuffle")' \
+  # Play, not Shuffle: the first song must be the playlist's first.
+  tap_where playlist '(desc.lower() == "play" or text.lower() == "play") and clickable' \
+    || tap_where playlist2 'desc.lower() == "play" or text.lower() == "play"' \
     || { echo "FAIL no Play button on the imported playlist"; fail=1; }
+  first=$(echo "$result" | sed -n 's/.*, first \([A-Za-z0-9]*\).*/\1/p')
   m=$(wait_log "match [A-Za-z0-9]+ " 60)
+  case "$m" in
+    *"match $first "*) echo "OK   the playlist's first song was asked first ($first)" ;;
+    *"match "*) echo "FAIL the first song asked was not the playlist's first ($first): ${m#*: match }"; fail=1 ;;
+  esac
   case "$m" in
     *"->"*) echo "OK   matched on YouTube Music: ${m#*: match }" ;;
     *"none close enough"*) echo "WARN first song not found on YouTube Music: ${m#*: match }" ;;
