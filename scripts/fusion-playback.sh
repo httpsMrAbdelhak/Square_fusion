@@ -178,11 +178,15 @@ if [ "$imported" = 1 ]; then
     || tap_where playlist2 'desc.lower() == "play" or text.lower() == "play"' \
     || { echo "FAIL no Play button on the imported playlist"; fail=1; }
   first=$(echo "$result" | sed -n 's/.*, first \([A-Za-z0-9]*\).*/\1/p')
-  m=$(wait_log "match [A-Za-z0-9]+ " 60)
-  case "$m" in
-    *"match $first "*) echo "OK   the playlist's first song was asked first ($first)" ;;
-    *"match "*) echo "FAIL the first song asked was not the playlist's first ($first): ${m#*: match }"; fail=1 ;;
+  # What the player loads first (the next songs are matched ahead in parallel,
+  # so the first match logged need not be the first song).
+  l=$(wait_log "player loads sp-" 60)
+  case "$l" in
+    *"player loads sp-$first"*) echo "OK   the player loaded the playlist's first song first ($first)" ;;
+    *"player loads"*) echo "FAIL the player loaded another song first than the playlist's first ($first): ${l#*: }"; fail=1 ;;
+    *) echo "WARN the player loaded no Spotify song in 60 s" ;;
   esac
+  m=$(wait_log "match $first " 60 || wait_log "match [A-Za-z0-9]+ " 5)
   case "$m" in
     *"->"*) echo "OK   matched on YouTube Music: ${m#*: match }" ;;
     *"none close enough"*) echo "WARN first song not found on YouTube Music: ${m#*: match }" ;;

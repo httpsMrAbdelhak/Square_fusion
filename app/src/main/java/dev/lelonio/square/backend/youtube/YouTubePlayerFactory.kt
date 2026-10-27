@@ -542,6 +542,7 @@ private class YouTubeStreamResolver(
     private fun realVideoId(uri: String): String {
         val id = YouTubeBackend.videoIdOfUri(uri)
         return if (dev.lelonio.square.fusion.spotify.SpotifyMatches.isPlaceholder(id)) {
+            dev.lelonio.square.fusion.FusionLog.i("player loads $id")
             dev.lelonio.square.fusion.spotify.SpotifyMatches.videoIdBlocking(id)
         } else {
             id
