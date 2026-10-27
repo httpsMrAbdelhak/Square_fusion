@@ -1,8 +1,8 @@
 > **Square Fusion** — this repository is a modified Square that installs beside
-> the original (`dev.lelonio.square.fusion`) and adds BitChord's addon sources,
-> JioSaavn (off by default), a Spotify library for free accounts, source
-> quality settings, stream information, loudness normalisation, BitChord's
-> launcher icons and a refresh-rate setting.
+> the original (`dev.lelonio.square.fusion`): YouTube Music only, four audio
+> quality levels, your Spotify playlists and imported Spotify playlist links in
+> the Library (played through YouTube Music), BitChord's launcher icons, a
+> refresh-rate setting, and updates from this repository's own releases.
 > **APK:** https://github.com/httpsMrAbdelhak/Square_fusion/releases/latest/download/square-fusion.apk
 > · Details, limits and install steps (French): [docs/FUSION.md](docs/FUSION.md)
 > · Attributions: [NOTICE](NOTICE). Everything below is Square's own README.

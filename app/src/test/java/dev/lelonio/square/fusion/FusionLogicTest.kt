@@ -113,6 +113,17 @@ class FusionLogicTest {
         assertEquals("album" to id, SpotifyLinks.parse("spotify:album:$id"))
     }
 
+    // ── Updates ─────────────────────────────────────────────────────────
+
+    @Test
+    fun fusionVersionsCompareByBuildThenUpstream() {
+        val newer = dev.lelonio.square.update.Updater.Companion::isNewer
+        assertEquals(true, newer("2.6.3-fusion.14", "2.6.3-fusion.13"))
+        assertEquals(false, newer("2.6.3-fusion.13", "2.6.3-fusion.13"))
+        assertEquals(true, newer("2.6.4-fusion.20", "2.6.3-fusion.25"))
+        assertEquals(false, newer("2.6.3-fusion.9", "2.6.3-fusion.10"))
+    }
+
     // ── Spotify answers ─────────────────────────────────────────────────
 
     private val json = Json { ignoreUnknownKeys = true }
