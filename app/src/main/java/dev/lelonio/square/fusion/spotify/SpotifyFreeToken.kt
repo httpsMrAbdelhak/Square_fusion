@@ -65,6 +65,18 @@ internal object SpotifyFreeToken {
         appContext = context.applicationContext
     }
 
+    /**
+     * Square Fusion: the anonymous token a public embed page carries (see
+     * SpotifyEmbed), used while no account is connected, so a long public
+     * playlist can be paged through the same API without a WebView.
+     */
+    fun seedAnonymous(token: String, expiresAtMs: Long, clientId: String?) {
+        if (SpotifyFreeAccount.cookie().isNotBlank()) return
+        cachedAccessToken = token
+        accessTokenExpiresAtMs = expiresAtMs
+        clientId?.let { cachedClientId = it }
+    }
+
     fun invalidate() {
         cachedAccessToken = null
         accessTokenExpiresAtMs = 0L

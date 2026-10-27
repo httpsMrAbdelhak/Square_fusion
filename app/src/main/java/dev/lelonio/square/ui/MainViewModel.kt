@@ -2835,6 +2835,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     when {
                         it is IllegalArgumentException -> string(R.string.fusion_import_bad_link)
                         it is SpotifyPlaylistUnavailable -> string(R.string.fusion_spotify_unavailable)
+                        // Without an account there is no session to expire: Spotify refused.
+                        !SpotifyFreeAccount.connected.value &&
+                            (it as? SpotifyFreeAccount.FailureException)?.failure == SpotifyFreeAccount.Failure.SessionExpired ->
+                            string(R.string.fusion_spotify_unavailable)
                         else -> spotifyError(it)
                     },
                 )

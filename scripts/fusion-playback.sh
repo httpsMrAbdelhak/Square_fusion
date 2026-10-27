@@ -160,7 +160,8 @@ shot imported
 imported=0
 case "$result" in
   *"imported playlist"*) echo "OK   ${result#*: }"; imported=1 ;;
-  *"import failed"*) echo "WARN Spotify refused the import here: ${result#*: }" ;;
+  *"import failed"*) echo "WARN Spotify refused the import here: ${result#*: }"
+    adb logcat -d -s 'SquareFusion:*' | tail -n 25 | sed 's/^/LOG /' ;;
   *) echo "FAIL the import neither finished nor failed in 90 s"; fail=1 ;;
 esac
 alive || { echo "FAIL app stopped during the import"; fail=1; }

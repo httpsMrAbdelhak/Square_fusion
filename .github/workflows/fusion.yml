@@ -290,7 +290,7 @@ jobs:
             [ -f "$log" ] || { echo "::warning title=$log::missing"; continue; }
             level=notice
             grep -qE "^FAIL|FAILURES|Process crashed|INSTRUMENTATION_FAILED" "$log" && level=error
-            grep -E "^(OK|FAIL|WARN) |^== |result|FAILURES|Tests run|OK \\(|^[a-zA-Z.]+Test[#:]|Process crashed|stack=|FATAL|Caused by|Exception|at dev\.lelonio\.square" "$log" | head -n 150 > "$RUNNER_TEMP/lines.txt" || true
+            grep -E "^(OK|FAIL|WARN|LOG) |^== |result|FAILURES|Tests run|OK \\(|^[a-zA-Z.]+Test[#:]|Process crashed|stack=|FATAL|Caused by|Exception|at dev\.lelonio\.square" "$log" | head -n 150 > "$RUNNER_TEMP/lines.txt" || true
             split -l 30 "$RUNNER_TEMP/lines.txt" "$RUNNER_TEMP/part-"
             for part in "$RUNNER_TEMP"/part-*; do
               [ -f "$part" ] || continue

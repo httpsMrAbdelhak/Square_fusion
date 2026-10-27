@@ -1,6 +1,7 @@
 package dev.lelonio.square.fusion
 
 import dev.lelonio.square.backend.youtube.AudioQuality
+import dev.lelonio.square.fusion.spotify.SpotifyEmbed
 import dev.lelonio.square.fusion.spotify.SpotifyLinks
 import dev.lelonio.square.fusion.spotify.SpotifyMatches
 import dev.lelonio.square.fusion.spotify.SpotifyPlaylistUnavailable
@@ -142,6 +143,33 @@ class FusionLogicTest {
         val missing = json.parseToJsonElement("""{"data":{"playlistV2":{"__typename":"NotFound"}}}""").jsonObject
         try {
             parsePlaylistInfo("abc", missing)
+            throw AssertionError("expected unavailable")
+        } catch (_: SpotifyPlaylistUnavailable) {
+        }
+    }
+
+    @Test
+    fun publicEmbedPageIsRead() {
+        val data = """{"props":{"pageProps":{"state":{"data":{"entity":{"type":"playlist","name":"Today’s Top Hits",
+            "subtitle":"Spotify","coverArt":{"sources":[{"url":"https://i.scdn.co/image/abc"}]},
+            "trackList":[
+              {"uri":"spotify:track:2sFepQNyl1WjpROruP8bJ0","title":"Housewife","subtitle":"Tate McRae","duration":208810},
+              {"uri":"spotify:episode:x","title":"Podcast","subtitle":"Show","duration":1},
+              {"uri":"spotify:track:0VjIjW4GlUZAMYd2vXMi3b","title":"Blinding Lights","subtitle":"The Weeknd","duration":200040}
+            ]}},
+            "settings":{"clientId":"cid","session":{"accessToken":"tok","accessTokenExpirationTimestampMs":1700000000000,"isAnonymous":true}}}}}}"""
+        val page = SpotifyEmbed.parse("<html><script id=\"__NEXT_DATA__\" type=\"application/json\">$data</script></html>")
+        assertEquals("Today’s Top Hits", page.name)
+        assertEquals("Spotify", page.owner)
+        assertEquals("https://i.scdn.co/image/abc", page.imageUrl)
+        assertEquals(listOf("Housewife", "Blinding Lights"), page.tracks.map { it.title })
+        assertEquals("2sFepQNyl1WjpROruP8bJ0", page.tracks[0].id)
+        assertEquals("Tate McRae", page.tracks[0].artist)
+        assertEquals(208810, page.tracks[0].durationMs)
+        assertEquals("tok", page.token)
+        assertEquals("cid", page.clientId)
+        try {
+            SpotifyEmbed.parse("<html>Page not found</html>")
             throw AssertionError("expected unavailable")
         } catch (_: SpotifyPlaylistUnavailable) {
         }
