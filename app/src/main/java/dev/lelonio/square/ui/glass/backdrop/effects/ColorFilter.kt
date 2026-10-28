@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ColorMatrixColorFilter
 import dev.lelonio.square.ui.glass.backdrop.BackdropEffectScope
 import dev.lelonio.square.ui.glass.backdrop.internal.ColorFilterEffect
+import dev.lelonio.square.ui.glass.backdrop.isBackdropFallbackSupported
 import dev.lelonio.square.ui.glass.backdrop.isRenderEffectSupported
 
 fun BackdropEffectScope.colorFilter(colorFilter: ColorFilter) {
@@ -24,7 +25,7 @@ fun BackdropEffectScope.colorFilter(colorFilter: ColorFilter) {
 }
 
 fun BackdropEffectScope.opacity(@FloatRange(from = 0.0, to = 1.0) alpha: Float) {
-    val colorMatrix = ColorMatrix(
+    val matrix = ColorMatrix(
         floatArrayOf(
             1f, 0f, 0f, 0f, 0f,
             0f, 1f, 0f, 0f, 0f,
@@ -32,7 +33,36 @@ fun BackdropEffectScope.opacity(@FloatRange(from = 0.0, to = 1.0) alpha: Float) 
             0f, 0f, 0f, alpha, 0f
         )
     )
-    colorFilter(ColorMatrixColorFilter(colorMatrix))
+    colorMatrix(matrix)
+}
+
+/**
+ * Square Fusion: a colour matrix, as a ColorFilter where there is a
+ * RenderEffect, and kept for the Android 11 drawing where there is not.
+ */
+internal fun BackdropEffectScope.colorMatrix(matrix: ColorMatrix) {
+    if (!isRenderEffectSupported()) {
+        if (isBackdropFallbackSupported()) {
+            fallbackColorMatrix = fallbackColorMatrix?.let { thenApply(it, matrix) } ?: matrix
+        }
+        return
+    }
+    colorFilter(ColorMatrixColorFilter(matrix))
+}
+
+/** The matrix that applies [first], then [second] (4x5, the last column an offset). */
+internal fun thenApply(first: ColorMatrix, second: ColorMatrix): ColorMatrix {
+    val a = first.values
+    val b = second.values
+    val out = FloatArray(20)
+    for (i in 0 until 4) {
+        for (j in 0 until 5) {
+            var v = if (j == 4) b[i * 5 + 4] else 0f
+            for (k in 0 until 4) v += b[i * 5 + k] * a[k * 5 + j]
+            out[i * 5 + j] = v
+        }
+    }
+    return ColorMatrix(out)
 }
 
 fun BackdropEffectScope.colorControls(
@@ -44,20 +74,20 @@ fun BackdropEffectScope.colorControls(
         return
     }
 
-    colorFilter(colorControlsColorFilter(brightness, contrast, saturation))
+    colorMatrix(colorControlsMatrix(brightness, contrast, saturation))
 }
 
-private val VibrantColorFilter = colorControlsColorFilter(saturation = 1.5f)
+private val VibrantColorMatrix = colorControlsMatrix(saturation = 1.5f)
 
 fun BackdropEffectScope.vibrancy() {
-    colorFilter(VibrantColorFilter)
+    colorMatrix(VibrantColorMatrix)
 }
 
-private fun colorControlsColorFilter(
+private fun colorControlsMatrix(
     brightness: Float = 0f,
     contrast: Float = 1f,
     saturation: Float = 1f
-): ColorFilter {
+): ColorMatrix {
     val invSat = 1f - saturation
     val r = 0.213f * invSat
     val g = 0.715f * invSat
@@ -80,5 +110,5 @@ private fun colorControlsColorFilter(
             0f, 0f, 0f, 1f, 0f
         )
     )
-    return ColorMatrixColorFilter(colorMatrix)
+    return colorMatrix
 }

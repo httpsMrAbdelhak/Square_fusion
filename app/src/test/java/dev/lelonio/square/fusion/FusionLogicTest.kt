@@ -144,6 +144,42 @@ class FusionLogicTest {
         assertEquals("AAC", AudioQuality.codecOfStated(premium))
     }
 
+    // ── Glass on Android 11 ─────────────────────────────────────────────
+
+    @Test
+    fun glassIsOfferedFromAndroid11() {
+        assertEquals(false, dev.lelonio.square.ui.glass.isGlassSupported(29))
+        assertEquals(true, dev.lelonio.square.ui.glass.isGlassSupported(30))
+        assertEquals(true, dev.lelonio.square.ui.glass.isGlassSupported(31))
+        assertEquals(true, dev.lelonio.square.ui.glass.isGlassSupported(35))
+    }
+
+    @Test
+    fun fallbackBlurLevelsFollowTheRadius() {
+        val big = androidx.compose.ui.unit.IntSize(400, 200)
+        val levels = dev.lelonio.square.ui.glass.backdrop.internal.FallbackBlur.Companion::levelsFor
+        assertEquals(0, levels(0f, big))
+        assertEquals(2, levels(7f, big))
+        assertEquals(4, levels(28f, big))
+        // Never more halvings than the pane has room for.
+        assertEquals(1, levels(200f, androidx.compose.ui.unit.IntSize(12, 12)))
+    }
+
+    @Test
+    fun colourMatricesCombineInOrder() {
+        val half = androidx.compose.ui.graphics.ColorMatrix(
+            floatArrayOf(0.5f, 0f, 0f, 0f, 0f, 0f, 0.5f, 0f, 0f, 0f, 0f, 0f, 0.5f, 0f, 0f, 0f, 0f, 0f, 1f, 0f),
+        )
+        val plus = androidx.compose.ui.graphics.ColorMatrix(
+            floatArrayOf(1f, 0f, 0f, 0f, 10f, 0f, 1f, 0f, 0f, 10f, 0f, 0f, 1f, 0f, 10f, 0f, 0f, 0f, 1f, 0f),
+        )
+        // Halve, then add 10: red 100 -> 60. Add, then halve: 100 -> 55.
+        val halveThenAdd = dev.lelonio.square.ui.glass.backdrop.effects.thenApply(half, plus).values
+        assertEquals(60f, halveThenAdd[0] * 100f + halveThenAdd[4], 0.001f)
+        val addThenHalve = dev.lelonio.square.ui.glass.backdrop.effects.thenApply(plus, half).values
+        assertEquals(55f, addThenHalve[0] * 100f + addThenHalve[4], 0.001f)
+    }
+
     // ── Updates ─────────────────────────────────────────────────────────
 
     @Test

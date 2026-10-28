@@ -13,13 +13,21 @@ import androidx.annotation.FloatRange
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TileMode
 import dev.lelonio.square.ui.glass.backdrop.BackdropEffectScope
+import dev.lelonio.square.ui.glass.backdrop.isBackdropFallbackSupported
 import dev.lelonio.square.ui.glass.backdrop.isRenderEffectSupported
 
 fun BackdropEffectScope.blur(
     @FloatRange(from = 0.0) radius: Float,
     edgeTreatment: TileMode = TileMode.Clamp
 ) {
-    if (!isRenderEffectSupported()) return
+    if (!isRenderEffectSupported()) {
+        // Square Fusion: kept for the Android 11 blur (two blurs in a row add
+        // up as their squares do, as Gaussians do).
+        if (isBackdropFallbackSupported() && radius > 0f) {
+            fallbackBlurRadius = kotlin.math.sqrt(fallbackBlurRadius * fallbackBlurRadius + radius * radius)
+        }
+        return
+    }
     if (radius <= 0f) return
 
     if (edgeTreatment != TileMode.Clamp || renderEffect != null) {

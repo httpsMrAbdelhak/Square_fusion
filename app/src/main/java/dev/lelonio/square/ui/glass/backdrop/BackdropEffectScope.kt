@@ -10,6 +10,7 @@
 package dev.lelonio.square.ui.glass.backdrop
 
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -38,6 +39,12 @@ sealed interface BackdropEffectScope : Density, RuntimeShaderCache {
     var padding: Float
 
     var renderEffect: RenderEffect?
+
+    /** Square Fusion: the blur radius the effects asked for, where there is no RenderEffect (Android 11). */
+    var fallbackBlurRadius: Float
+
+    /** Square Fusion: the colour matrices the effects asked for, combined in order, likewise. */
+    var fallbackColorMatrix: ColorMatrix?
 }
 
 internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeShaderCache {
@@ -49,6 +56,8 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
     override var padding: Float = 0f
     override var contentScale: Float = 1f
     override var renderEffect: RenderEffect? = null
+    override var fallbackBlurRadius: Float = 0f
+    override var fallbackColorMatrix: ColorMatrix? = null
 
     private val runtimeShaderCache = RuntimeShaderCacheImpl()
 
@@ -85,6 +94,8 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
     fun apply(effects: BackdropEffectScope.() -> Unit) {
         padding = 0f
         renderEffect = null
+        fallbackBlurRadius = 0f
+        fallbackColorMatrix = null
         effects()
     }
 
@@ -95,6 +106,8 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
         layoutDirection = LayoutDirection.Ltr
         padding = 0f
         renderEffect = null
+        fallbackBlurRadius = 0f
+        fallbackColorMatrix = null
         runtimeShaderCache.clear()
     }
 }

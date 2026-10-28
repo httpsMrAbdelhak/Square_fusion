@@ -17,3 +17,10 @@ fun isRenderEffectSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_
 
 @ChecksSdkIntAtLeast(Build.VERSION_CODES.TIRAMISU)
 fun isRuntimeShaderSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+
+/**
+ * Square Fusion: Android 11, which has no RenderEffect. The glass's blur and
+ * colour filters are drawn there by [internal.FallbackBlur] instead, from the
+ * same effect values; the lens (RuntimeShader) is absent, as on Android 12.
+ */
+fun isBackdropFallbackSupported(): Boolean = Build.VERSION.SDK_INT == Build.VERSION_CODES.R

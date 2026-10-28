@@ -489,6 +489,18 @@ if tap_where avatar 'clickable and x1 > 230 and y2 < 160'; then
   dump settings
   shot settings
   if grep -qi 'Support development\|ko-fi' "$OUT/settings.xml"; then echo "FAIL the support tile is still there"; fail=1; else echo "OK   no support tile; $(grep -oE 'text="(Playback|Equalizer|Glass|Downloads|App|About)"' "$OUT/settings.xml" | wc -l) page tiles"; fi
+  # The Glass page: its settings on this Android 11 emulator, not the "no hardware blur" note.
+  if tap_where settings-glass 'text == "Glass"'; then
+    sleep 4
+    dump glass
+    shot glass
+    if grep -q 'no hardware blur' "$OUT/glass.xml"; then echo "FAIL the Glass page says this phone has no blur"; fail=1
+    elif grep -q 'text="Colour"' "$OUT/glass.xml"; then echo "OK   Glass page shows its settings on Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
+    else echo "WARN Glass page: settings not recognised"; texts glass | head -n 15; fi
+    adb shell input keyevent KEYCODE_BACK
+    sleep 3
+    dump settings
+  fi
   if tap_where settings-about 'text == "About"'; then
     sleep 4
     dump about

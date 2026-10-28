@@ -47,6 +47,7 @@ import dev.lelonio.square.ui.glass.backdrop.backdrops.LayerBackdrop
 import dev.lelonio.square.ui.glass.backdrop.highlight.Highlight
 import dev.lelonio.square.ui.glass.backdrop.highlight.HighlightElement
 import dev.lelonio.square.ui.glass.backdrop.internal.ShapeProvider
+import dev.lelonio.square.ui.glass.backdrop.internal.FallbackBlur
 import dev.lelonio.square.ui.glass.backdrop.internal.recordLayer
 import dev.lelonio.square.ui.glass.backdrop.shadow.InnerShadow
 import dev.lelonio.square.ui.glass.backdrop.shadow.InnerShadowElement
@@ -531,7 +532,9 @@ private class DrawBackdropNode(
     }
 
     private val drawBackdropLayer: DrawScope.() -> Boolean = drawBackdropLayer@{
-        val bucket = loopBucket?.invoke()
+        // Square Fusion: on Android 11 the blur is drawn into the pane's own
+        // layer (see recordBackdrop), which the loop buckets do not have.
+        val bucket = if (fallbackActive()) null else loopBucket?.invoke()
         if (bucket != null) {
             return@drawBackdropLayer drawBucketedLayer(bucket)
         }
@@ -633,12 +636,7 @@ private class DrawBackdropNode(
             wasHolding = holding
 
             if (needsRecord) {
-                recordLayer(
-                    this@DrawBackdropNode,
-                    layer,
-                    size = recordSize,
-                    block = recordBackdropBlock
-                )
+                recordBackdrop(layer, recordSize)
                 recordedBackdropVersion = version
                 recordedBackdropOffset = offset
                 recordedBackdropSize = recordSize
@@ -755,7 +753,14 @@ private class DrawBackdropNode(
     }
 
     private fun updateEffects() {
-        if (!isRenderEffectSupported()) return
+        if (!isRenderEffectSupported()) {
+            // Square Fusion: the same effects, read for the Android 11 drawing.
+            if (isBackdropFallbackSupported()) {
+                effectScope.apply(effects)
+                surfaceDirty = true
+            }
+            return
+        }
 
         effectScope.apply(effects)
         graphicsLayer?.renderEffect = effectScope.renderEffect
@@ -774,7 +779,35 @@ private class DrawBackdropNode(
         observeEffects()
     }
 
+    /** Square Fusion: the blur and colour of the effects, drawn without a RenderEffect (Android 11). */
+    private var fallbackBlur: FallbackBlur? = null
+
+    private fun fallbackActive(): Boolean =
+        !isRenderEffectSupported() && isBackdropFallbackSupported() &&
+            (effectScope.fallbackBlurRadius > 0f || effectScope.fallbackColorMatrix != null)
+
+    /** Records the backdrop into [layer]: as it is, or on Android 11 through [FallbackBlur]. */
+    private fun DrawScope.recordBackdrop(layer: GraphicsLayer, size: IntSize) {
+        if (!fallbackActive()) {
+            recordLayer(this@DrawBackdropNode, layer, size = size, block = recordBackdropBlock)
+            return
+        }
+        val blur = fallbackBlur ?: FallbackBlur().also { fallbackBlur = it }
+        with(blur) {
+            record(
+                this@DrawBackdropNode,
+                layer,
+                size,
+                effectScope.fallbackBlurRadius,
+                effectScope.fallbackColorMatrix,
+                recordBackdropBlock,
+            )
+        }
+    }
+
     override fun onDetach() {
+        fallbackBlur?.release(this)
+        fallbackBlur = null
         val graphicsContext = requireGraphicsContext()
         graphicsLayer?.let { layer ->
             graphicsContext.releaseGraphicsLayer(layer)

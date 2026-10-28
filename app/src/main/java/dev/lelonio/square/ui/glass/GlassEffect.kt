@@ -250,7 +250,10 @@ fun glassResolutionScale(blurRadiusDp: Float): Float {
  * The backdrop blur pipeline requires [android.graphics.RenderEffect] on a
  * [android.graphics.RenderNode], which is available from Android 12 (API 31).
  */
-fun isGlassSupported(sdkInt: Int = Build.VERSION.SDK_INT): Boolean = sdkInt >= Build.VERSION_CODES.S
+// Square Fusion: and Android 11, where the blur and colour filters are drawn
+// without a RenderEffect (see backdrop.internal.FallbackBlur).
+fun isGlassSupported(sdkInt: Int = Build.VERSION.SDK_INT): Boolean =
+    sdkInt >= Build.VERSION_CODES.S || sdkInt == Build.VERSION_CODES.R
 
 /**
  * Devices Android flags as low-RAM ([ActivityManager.isLowRamDevice]) can't push the
@@ -512,7 +515,10 @@ fun Modifier.liquidGlass(
     // low on memory. That case used to return the modifier untouched, which
     // is no film and no rim: the tab bar and the mini player were text
     // floating over the page.
-    if (shouldUseTranslucentGlassFallback(config.style, isRenderEffectSupported()) ||
+    if (shouldUseTranslucentGlassFallback(
+            config.style,
+            isRenderEffectSupported() || dev.lelonio.square.ui.glass.backdrop.isBackdropFallbackSupported(),
+        ) ||
         !isGlassAllowed()
     ) {
         // The film and the rim, which is what a pane of this app's glass looks
