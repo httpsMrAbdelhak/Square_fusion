@@ -65,6 +65,25 @@ Music) ; fréquences lues sur le vrai écran.
 | Correspondance sur YouTube Music | OK (ex. « Manchild », Sabrina Carpenter → `DntZ3-yCaFs`) |
 | Son réellement joué | **non vérifiable ici** : YouTube refuse les flux anonymes au réseau du runner ; l'application ne plante pas |
 
+### Ajouts de la version « podcasts, téléchargements, Apple Music » (build debug)
+| Étape | Résultat |
+|---|---|
+| Accueil : puce « Podcasts » présente, page podcasts de YouTube Music chargée | OK |
+| Recherche « Flippe Go Sleep » › filtre Podcasts sélectionné | OK |
+| Ouverture du podcast trouvé : épisodes affichés, pas de « Aucun titre » | OK |
+| Retour à la recherche : filtre Podcasts toujours sélectionné | OK |
+| Bibliothèque › + › Importer › lien Apple Music public (« Today's Hits ») | OK : 50 titres |
+| Import Spotify, ordre de lecture, correspondance YouTube Music | OK (inchangé) |
+
+Diagnostic des podcasts vides, fait contre YouTube Music depuis GitHub
+Actions avant la correction : pour « Flippe & Go Sleep », « SIP & GOSSIP »
+(Maghla) et « Les Grosses Têtes », la lecture de l'identifiant `MPSP…` comme
+playlist renvoyait 0 titre sans erreur ; la liste de l'émission (même
+identifiant sans `MPSP`) renvoie 22, 35 et 100 épisodes.
+
+Unitaires ajoutés : lecture d'une page Apple Music (titre, curateur, pochette,
+titres dans l'ordre, vidéos ignorées, page vide → indisponible) et de ses liens.
+
 ## 4. À vérifier sur votre téléphone
 
 - Lecture réelle d'un titre Spotify via YouTube Music, suivant / précédent /
@@ -73,6 +92,9 @@ Music) ; fréquences lues sur le vrai écran.
   seulement avec un compte YouTube Music Premium connecté (non testé).
 - Connexion Spotify réelle (compte gratuit), playlists, titres likés, artistes
   suivis, playlist privée importée avec le compte.
+- Téléchargement d'une playlist depuis son menu, avec chaque qualité de
+  téléchargement (le débit du fichier est visible dans les téléchargements).
+- Lecture des épisodes de podcast (YouTube refuse la lecture anonyme ici).
 - Mise à jour depuis l'application (Paramètres › À propos), avec
   l'installateur d'Android.
 - 120 Hz (l'émulateur n'a que 60 Hz), lanceur de votre téléphone pour les
