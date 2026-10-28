@@ -152,6 +152,10 @@ else
   echo "OK   no source switcher on the home page"
 fi
 shot home
+greet=$(grep -oE 'text="Good (morning|afternoon|evening)[^"]*"' "$OUT/home.xml" | head -n 1)
+hour=$(adb shell date +%H | tr -d '\r')
+if [ -n "$greet" ]; then echo "OK   greeting on the home page at ${hour}h: $greet"; else echo "FAIL no greeting on the home page"; fail=1; texts home | head -n 8; fi
+grep -q 'text="Square"' "$OUT/home.xml" && { echo "FAIL the home page still says Square"; fail=1; }
 # The Podcasts chip, beside YouTube Music's own ones.
 if grep -q 'text="Podcasts"' "$OUT/home.xml"; then
   echo "OK   Podcasts chip on the home page"
@@ -391,6 +395,95 @@ case "$apple" in
     adb logcat -d -s 'SquareFusion:*' | tail -n 15 | sed 's/^/LOG /' ;;
   *) echo "FAIL the Apple Music import neither finished nor failed in 90 s"; fail=1 ;;
 esac
+
+# ── 5. Song lengths on an imported Spotify playlist ─────────────────────────
+if [ -f "$OUT/playlist.xml" ]; then
+  dashes=$(grep -o 'text="--:--"' "$OUT/playlist.xml" | wc -l)
+  lengths=$(grep -oE 'text="[0-9]+:[0-9]{2}"' "$OUT/playlist.xml" | wc -l)
+  if [ "$dashes" = 0 ]; then echo "OK   imported playlist: $lengths song lengths on screen, no --:--"; else echo "FAIL imported playlist shows $dashes --:--"; fail=1; fi
+fi
+
+# ── 6. Edit a playlist's name: kept, shown, and still there after a restart ──
+to_library() {
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
+  sleep 3
+  for i in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 1; done
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
+  sleep 4
+  tap_where "$1" '(text == "Library" or desc == "Library") and y1 > 400' || tap_where "$1-b" 'text == "Library" or desc == "Library"'
+  sleep 4
+}
+long_press_where() {
+  dump "$1"
+  local b
+  b=$(python3 - "$OUT/$1.xml" "$2" <<'PY'
+import re, sys
+xml = open(sys.argv[1], encoding="utf-8").read()
+for m in re.finditer(r'<node [^>]*>', xml):
+    n = m.group(0)
+    text = re.search(r'text="([^"]*)"', n).group(1)
+    x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n).groups())
+    if eval(sys.argv[2]):
+        print((x1 + x2) // 2, (y1 + y2) // 2); break
+PY
+)
+  [ -n "$b" ] || return 1
+  adb shell input swipe $b $b 900
+}
+step "rename a playlist"
+to_library lib-a
+if long_press_where lib-b '"Top Hits" in text'; then
+  sleep 2
+  if tap_where edit-menu 'text == "Edit"'; then
+    sleep 3
+    tap_where edit-field '"EditText" in cls' || true
+    adb shell input keyevent KEYCODE_MOVE_END
+    for i in $(seq 1 40); do adb shell input keyevent KEYCODE_DEL; done
+    for c in F u s i o n T e s t; do adb shell input text "$c"; sleep 0.3; done
+    tap_where edit-save 'text == "Save"'
+    sleep 4
+    dump renamed
+    shot renamed
+    if grep -q 'could not be saved' "$OUT/renamed.xml"; then echo "FAIL the rename showed an error"; fail=1; fi
+    if grep -q 'text="FusionTest"' "$OUT/renamed.xml"; then echo "OK   renamed in the Library"; else echo "FAIL the new name is not shown"; fail=1; texts renamed | head -n 15; fi
+    adb shell am force-stop "$PKG"
+    sleep 2
+    to_library lib-c
+    dump restarted
+    if grep -q 'text="FusionTest"' "$OUT/restarted.xml"; then echo "OK   the name is still there after a restart"; else echo "FAIL the name was lost on restart"; fail=1; fi
+  else
+    echo "FAIL no Edit in the playlist's menu"; fail=1; texts edit-menu | head -n 15
+  fi
+else
+  echo "WARN no imported playlist row to long-press"; texts lib-b | head -n 15
+fi
+
+# ── 7. Settings index and About ─────────────────────────────────────────────
+step "settings and About"
+adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
+sleep 3
+for i in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 1; done
+adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
+sleep 4
+tap_where tabs-home '(text == "Home" or desc == "Home") and y1 > 400' || true
+sleep 3
+if tap_where avatar 'clickable and x1 > 230 and y2 < 160'; then
+  sleep 4
+  dump settings
+  shot settings
+  if grep -qi 'Support development\|ko-fi' "$OUT/settings.xml"; then echo "FAIL the support tile is still there"; fail=1; else echo "OK   no support tile; $(grep -oE 'text="(Playback|Equalizer|Glass|Downloads|App|About)"' "$OUT/settings.xml" | wc -l) page tiles"; fi
+  if tap_where settings-about 'text == "About"'; then
+    sleep 4
+    dump about
+    shot about
+    if grep -q 'Lelonio\|ko-fi\|Support development' "$OUT/about.xml"; then echo "FAIL About still names the original developer's links"; fail=1; texts about | head -n 20; else echo "OK   About without the original developer's links"; fi
+    grep -q 'httpsMrAbdelhak' "$OUT/about.xml" && echo "OK   About shows this repository" || echo "WARN this repository is not on the first screen of About"
+  else
+    echo "WARN no About tile"; texts settings | head -n 20
+  fi
+else
+  echo "WARN could not open the settings from the profile picture"
+fi
 
 alive && echo "OK   app still running" || { echo "FAIL app stopped"; fail=1; }
 adb logcat -d | grep -E "SquareFusion|SquareYTQuality|SquareUi|AndroidRuntime|FATAL" | tail -n 200 > "$OUT/logcat.txt" || true

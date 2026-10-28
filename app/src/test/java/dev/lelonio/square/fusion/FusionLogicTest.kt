@@ -116,6 +116,33 @@ class FusionLogicTest {
         assertEquals("album" to id, SpotifyLinks.parse("spotify:album:$id"))
     }
 
+    // ── Greeting, quality line ──────────────────────────────────────────
+
+    @Test
+    fun greetingFollowsTheHour() {
+        val of = dev.lelonio.square.ui.home::greetingOf
+        assertEquals(2, of(4))
+        assertEquals(0, of(5))
+        assertEquals(0, of(11))
+        assertEquals(1, of(12))
+        assertEquals(1, of(17))
+        assertEquals(2, of(18))
+        assertEquals(2, of(23))
+    }
+
+    @Test
+    fun qualityLineNamesTheCodecAndChecksTheStatedOne() {
+        assertEquals("AAC", AudioQuality.codecName("audio/mp4a-latm"))
+        assertEquals("Opus", AudioQuality.codecName("audio/opus"))
+        assertNull(AudioQuality.codecName("audio/x-unknown"))
+        val aac = AudioQuality.Choice(AudioQuality.Tier.HIGH, "M4A", 128, 140, signedIn = false)
+        val opus = AudioQuality.Choice(AudioQuality.Tier.MAX, "WEBMA_OPUS", 141, 251, signedIn = false)
+        val premium = AudioQuality.Choice(AudioQuality.Tier.MAX, "audio/mp4", 256, 141, signedIn = true)
+        assertEquals("AAC", AudioQuality.codecOfStated(aac))
+        assertEquals("Opus", AudioQuality.codecOfStated(opus))
+        assertEquals("AAC", AudioQuality.codecOfStated(premium))
+    }
+
     // ── Updates ─────────────────────────────────────────────────────────
 
     @Test
