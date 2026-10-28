@@ -116,11 +116,19 @@ fun SearchScreen(
     onLoadMore: () -> Unit = {},
     backdrop: Backdrop,
 ) {
-    var kind by remember { mutableStateOf(Kind.ALL) }
+    // Square Fusion: saved with the page, so coming back from a result finds
+    // the same filter (and, with the list's own saved state, the same place).
+    var kind by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(Kind.ALL) }
     // A new search answers a new question, so the page goes back to showing all
     // of the answer rather than staying filtered to what the last one was about.
+    // Compared with the search the filter was chosen for, which is saved too:
+    // coming back to the same search is not a new one.
     val query = state.query
-    remember(query) { kind = Kind.ALL }
+    var kindFor by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(query) }
+    if (kindFor != query) {
+        kindFor = query
+        kind = Kind.ALL
+    }
 
     val listState = rememberLazyListState()
 

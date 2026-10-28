@@ -612,6 +612,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private var youtubeParams: String? = null
 
+    /** Square Fusion: YouTube Music's chips, with Podcasts among them when YouTube did not offer it. */
+    private fun withPodcastsChip(chips: List<dev.lelonio.square.backend.HomeChip>): List<dev.lelonio.square.backend.HomeChip> {
+        if (container.activeBackend.id != BackendId.YOUTUBE_MUSIC) return chips
+        val label = string(R.string.podcasts)
+        if (chips.any { it.title.equals(label, ignoreCase = true) || it.params == dev.lelonio.square.backend.youtube.YouTubeBackend.PODCASTS_PARAMS }) return chips
+        return chips + dev.lelonio.square.backend.HomeChip(label, dev.lelonio.square.backend.youtube.YouTubeBackend.PODCASTS_PARAMS)
+    }
+
     private suspend fun readYouTubeHome(replace: Boolean) {
         val backend = container.activeBackend
         val before = _youtubeHome.value
@@ -622,12 +630,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
             .onSuccess { feed ->
-                val rows = if (replace) feed.rows else before.rows + feed.rows
+                // Square Fusion: the podcasts page opens with the new episodes
+                // of the podcasts the account follows, when it has any.
+                val podcasts = replace && youtubeParams == dev.lelonio.square.backend.youtube.YouTubeBackend.PODCASTS_PARAMS
+                val newEpisodes = if (podcasts) {
+                    runCatching { backend.newEpisodes() }.getOrDefault(emptyList())
+                        .takeIf { it.isNotEmpty() }
+                        ?.let { listOf(dev.lelonio.square.backend.HomeRow(title = string(R.string.new_episodes), tracks = it)) }
+                        .orEmpty()
+                } else {
+                    emptyList()
+                }
+                val rows = if (replace) newEpisodes + feed.rows else before.rows + feed.rows
                 _youtubeHome.value = before.copy(
                     rows = rows,
                     // A continuation carries no chips, so the ones already on
                     // screen stay where they are.
-                    chips = feed.chips.ifEmpty { before.chips },
+                    chips = withPodcastsChip(feed.chips.ifEmpty { before.chips }),
                     loading = false,
                     loadingMore = false,
                     error = null,

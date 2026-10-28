@@ -275,6 +275,20 @@ class YouTubeBackend(private val account: YouTubeAccount) : MusicBackend {
      */
     override suspend fun homeFeed(cursor: String?, params: String?): HomeFeed =
         withContext(Dispatchers.IO) {
+            // Square Fusion: the Podcasts chip is YouTube Music's own podcasts
+            // page (shows, episodes, picks), read and paged like the home's
+            // shelves. Its own chips are not the home's, so none are passed on.
+            if (params == PODCASTS_PARAMS) {
+                val page = if (cursor == null) {
+                    YouTube.podcastDiscover().getOrThrow()
+                } else {
+                    YouTube.home(continuation = cursor).getOrThrow()
+                }
+                return@withContext HomeFeed(
+                    rows = page.sections.map(::toHomeRow).filterNot { it.isEmpty },
+                    cursor = page.continuation,
+                )
+            }
             val page = wherever({ it.sections.isEmpty() }) {
                 YouTube.home(continuation = cursor, params = params).getOrThrow()
             }
@@ -918,6 +932,8 @@ class YouTubeBackend(private val account: YouTubeAccount) : MusicBackend {
         private const val LIST_WAIT_MS = 1_500L
         const val URI_SCHEME = "ytmusic:"
         const val TRACK_PREFIX = "ytmusic:track:"
+        /** Square Fusion: the home chip that opens YouTube Music's podcasts page; not a YouTube value. */
+        const val PODCASTS_PARAMS = "square-fusion:podcasts"
         const val PLAYLIST_PREFIX = "ytmusic:playlist:"
         const val ARTIST_PREFIX = "ytmusic:artist:"
         const val ALBUM_PREFIX = "ytmusic:album:"
