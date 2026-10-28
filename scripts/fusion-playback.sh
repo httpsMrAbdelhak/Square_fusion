@@ -300,7 +300,15 @@ if tap_where search-tab 'desc == "Search" or text == "Search"'; then
   sleep 3
   tap_where search-field '"EditText" in cls' || true
   # Typed in pieces: the emulator's keyboard drops letters from a long burst.
-  for word in Flippe Go Sleep; do adb shell input text "$word"; sleep 1; adb shell input keyevent KEYCODE_SPACE; sleep 1; done
+  q="Flippe Go Sleep"
+  for ((i = 0; i < ${#q}; i++)); do
+    c="${q:$i:1}"
+    if [ "$c" = " " ]; then adb shell input keyevent KEYCODE_SPACE; else adb shell input text "$c"; fi
+    sleep 0.4
+  done
+  sleep 2
+  dump typed
+  grep -q 'text="Flippe Go Sleep' "$OUT/typed.xml" && echo "OK   query typed" || echo "WARN query typed as: $(grep -o 'EditText[^>]*' "$OUT/typed.xml" | grep -o 'text="[^"]*"' | head -n 1)"
   adb shell input keyevent KEYCODE_ENTER
   sleep 12
   dump results1
@@ -313,10 +321,14 @@ m = re.search(r'text="Songs"[^>]*bounds="\[\d+,(\d+)\]\[\d+,(\d+)\]"', xml)
 print((int(m.group(1)) + int(m.group(2))) // 2 if m else 57)
 PY
 )
-    adb shell input swipe 300 "$chip_y" 30 "$chip_y" 400
-    sleep 2
-    dump results1b
-    tap_where results1b 'text == "Podcasts"' || { echo "WARN no Podcasts filter in the results"; texts results1b | head -n 30; }
+    found=0
+    for swipe in 1 2 3; do
+      adb shell input swipe 300 "$chip_y" 30 "$chip_y" 400
+      sleep 2
+      dump results1b
+      if tap_where results1b 'text == "Podcasts" and y1 < 150'; then found=1; break; fi
+    done
+    [ $found = 1 ] || { echo "WARN no Podcasts filter in the results"; texts results1b | head -n 12; }
   fi
   sleep 5
   dump results2
@@ -333,7 +345,7 @@ PY
       if [ "$rows" -gt 0 ]; then
         echo "OK   podcast opened from search with $rows episode rows on screen"
       else
-        echo "WARN the opened page shows no episode row"; texts podcast | head -n 30
+        echo "WARN the opened page shows no episode row"; texts podcast | head -n 20
       fi
     fi
     adb shell input keyevent KEYCODE_BACK
@@ -350,7 +362,7 @@ PY
     fi
   else
     echo "WARN no podcast result to open (YouTube search unavailable here?)"
-    texts results2 | head -n 40
+    texts results2 | head -n 12
   fi
 else
   echo "WARN no search button found"
