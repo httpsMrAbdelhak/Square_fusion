@@ -1,6 +1,7 @@
 package dev.lelonio.square.fusion
 
 import dev.lelonio.square.backend.youtube.AudioQuality
+import dev.lelonio.square.ui.home.greetingOf
 import dev.lelonio.square.fusion.spotify.AppleMusicPlaylists
 import dev.lelonio.square.fusion.spotify.SpotifyEmbed
 import dev.lelonio.square.fusion.spotify.SpotifyLinks
@@ -120,7 +121,7 @@ class FusionLogicTest {
 
     @Test
     fun greetingFollowsTheHour() {
-        val of = dev.lelonio.square.ui.home::greetingOf
+        val of: (Int) -> Int = { greetingOf(it) }
         assertEquals(2, of(4))
         assertEquals(0, of(5))
         assertEquals(0, of(11))
