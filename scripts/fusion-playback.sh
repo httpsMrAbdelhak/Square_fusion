@@ -433,14 +433,18 @@ PY
   adb shell input swipe $b $b 900
 }
 step "rename a playlist"
-to_library lib-a
-# Below the sign-in card when no YouTube account is connected.
-found=0
-for swipe in 0 1 2 3; do
-  [ $swipe = 0 ] || { adb shell input swipe 160 520 160 180 400; sleep 2; }
-  if long_press_where lib-b '"Top Hits" in text and y1 > 100'; then found=1; break; fi
-done
-if [ $found = 1 ]; then
+open_imported() {
+  # The imported playlist's page, through the Library's import: the same link
+  # imported again opens the same playlist, freshly read from Spotify.
+  to_library "$1"
+  tap_where "$1-plus" 'desc == "New playlist"' && sleep 3 \
+    && tap_where "$1-menu" 'text == "Import a playlist"' && sleep 3 \
+    && { tap_where "$1-field" '"EditText" in cls' || true; } \
+    && adb shell input text "'$LINK'" && sleep 1 \
+    && tap_where "$1-import" 'text == "Import"' && sleep 15
+}
+open_imported page-a
+if tap_where page-more 'desc == "More"'; then
   sleep 2
   if tap_where edit-menu 'text == "Edit"'; then
     sleep 3
@@ -451,27 +455,24 @@ if [ $found = 1 ]; then
     tap_where edit-save 'text == "Save"'
     sleep 4
     dump renamed
-    for swipe in 1 2 3; do
-      grep -q 'text="FusionTest"' "$OUT/renamed.xml" && break
-      adb shell input swipe 160 520 160 180 400; sleep 2; dump renamed
-    done
     shot renamed
     if grep -q 'could not be saved' "$OUT/renamed.xml"; then echo "FAIL the rename showed an error"; fail=1; fi
-    if grep -q 'text="FusionTest"' "$OUT/renamed.xml"; then echo "OK   renamed in the Library"; else echo "FAIL the new name is not shown"; fail=1; texts renamed | head -n 15; fi
+    if grep -q 'text="FusionTest"' "$OUT/renamed.xml"; then echo "OK   renamed: the page shows the new name"; else echo "FAIL the new name is not shown"; fail=1; texts renamed | head -n 15; fi
     adb shell am force-stop "$PKG"
     sleep 2
-    to_library lib-c
-    for swipe in 0 1 2 3; do
-      [ $swipe = 0 ] || { adb shell input swipe 160 520 160 180 400; sleep 2; }
-      dump restarted
-      grep -q 'text="FusionTest"' "$OUT/restarted.xml" && break
-    done
-    if grep -q 'text="FusionTest"' "$OUT/restarted.xml"; then echo "OK   the name is still there after a restart"; else echo "FAIL the name was lost on restart"; fail=1; fi
+    open_imported page-b
+    dump restarted
+    shot restarted
+    if grep -q 'text="FusionTest"' "$OUT/restarted.xml"; then
+      echo "OK   the name is still there after a restart and a new read from Spotify"
+    else
+      echo "FAIL the name was lost on restart"; fail=1; texts restarted | head -n 15
+    fi
   else
     echo "FAIL no Edit in the playlist's menu"; fail=1; texts edit-menu | head -n 15
   fi
 else
-  echo "WARN no imported playlist row to long-press"; texts lib-b | head -n 15
+  echo "WARN no More button on the imported playlist's page"; texts page-more | head -n 15
 fi
 
 # ── 7. Settings index and About ─────────────────────────────────────────────
