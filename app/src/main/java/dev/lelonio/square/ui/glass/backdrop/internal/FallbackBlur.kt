@@ -97,13 +97,28 @@ internal class FallbackBlur {
         }
     }
 
+    /**
+     * [from] drawn into [into] at its size, as the mean of four draws half a
+     * source pixel apart: a 2x2 box when halving, a tent when doubling,
+     * whatever filtering the GPU applies to a scaled layer (the emulator's
+     * samples the nearest pixel, which alone would only skip every other one).
+     * The mean is a running one: each draw over the ones before at 1/n.
+     */
     private fun DrawScope.draw(node: DelegatableNode, into: GraphicsLayer, intoSize: IntSize, from: GraphicsLayer, fromSize: IntSize) {
         recordLayer(node, into, size = intoSize) {
-            scale(
-                intoSize.width / fromSize.width.toFloat(),
-                intoSize.height / fromSize.height.toFloat(),
-                pivot = Offset.Zero,
-            ) { drawLayer(from) }
+            val bounds = androidx.compose.ui.geometry.Rect(0f, 0f, intoSize.width.toFloat(), intoSize.height.toFloat())
+            TAPS.forEachIndexed { index, (dx, dy) ->
+                val paint = androidx.compose.ui.graphics.Paint().apply { alpha = 1f / (index + 1) }
+                drawContext.canvas.saveLayer(bounds, paint)
+                scale(
+                    intoSize.width / fromSize.width.toFloat(),
+                    intoSize.height / fromSize.height.toFloat(),
+                    pivot = Offset.Zero,
+                ) {
+                    translate(dx, dy) { drawLayer(from) }
+                }
+                drawContext.canvas.restore()
+            }
         }
     }
 
@@ -129,5 +144,8 @@ internal class FallbackBlur {
         }
 
         private const val MAX_LEVELS = 6
+
+        /** Half a source pixel each way, in the source's own pixels. */
+        private val TAPS = listOf(-0.5f to -0.5f, 0.5f to -0.5f, -0.5f to 0.5f, 0.5f to 0.5f)
     }
 }
