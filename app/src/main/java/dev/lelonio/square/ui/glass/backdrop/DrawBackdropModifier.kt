@@ -48,6 +48,7 @@ import dev.lelonio.square.ui.glass.backdrop.highlight.Highlight
 import dev.lelonio.square.ui.glass.backdrop.highlight.HighlightElement
 import dev.lelonio.square.ui.glass.backdrop.internal.ShapeProvider
 import dev.lelonio.square.ui.glass.backdrop.internal.FallbackBlur
+import kotlinx.coroutines.launch
 import dev.lelonio.square.ui.glass.backdrop.internal.recordLayer
 import dev.lelonio.square.ui.glass.backdrop.shadow.InnerShadow
 import dev.lelonio.square.ui.glass.backdrop.shadow.InnerShadowElement
@@ -642,7 +643,11 @@ private class DrawBackdropNode(
                 fallbackActive() &&
                 (now - lastRecordedAt) / 1_000_000f < FallbackIntervalMillis
             if (throttled) {
-                this@DrawBackdropNode.invalidateDraw()
+                // One refresh once the interval is over, not a frame asked for on
+                // every frame: that kept the render thread busy for good on a
+                // slow phone (a frame longer than the interval re-recorded every
+                // time, and asked for the next).
+                scheduleFallbackRefresh(FallbackIntervalMillis - (now - lastRecordedAt) / 1_000_000f)
             } else if (needsRecord) {
                 recordBackdrop(layer, recordSize)
                 recordedBackdropVersion = version
@@ -788,7 +793,19 @@ private class DrawBackdropNode(
     }
 
     /** Square Fusion: the shortest time between two Android 11 blurs of a moving backdrop. */
-    private val FallbackIntervalMillis = 50f
+    private val FallbackIntervalMillis = 250f
+
+    private var fallbackRefreshPending = false
+
+    private fun scheduleFallbackRefresh(afterMillis: Float) {
+        if (fallbackRefreshPending) return
+        fallbackRefreshPending = true
+        coroutineScope.launch {
+            kotlinx.coroutines.delay(afterMillis.toLong().coerceAtLeast(16L))
+            fallbackRefreshPending = false
+            if (isAttached) invalidateDraw()
+        }
+    }
 
     /** Square Fusion: the blur and colour of the effects, drawn without a RenderEffect (Android 11). */
     private var fallbackBlur: FallbackBlur? = null

@@ -35,6 +35,25 @@ internal class FallbackBlur {
 
     private val layers = ArrayList<GraphicsLayer>()
 
+    /** Per pass, one layer per tap, drawn at the tap's share of the mean (alpha, no buffer of its own). */
+    private val taps = ArrayList<GraphicsLayer>()
+
+    private fun tap(index: Int, node: DelegatableNode): GraphicsLayer {
+        while (taps.size <= index) {
+            taps += node.requireGraphicsContext().createGraphicsLayer().apply {
+                compositingStrategy = CompositingStrategy.ModulateAlpha
+            }
+        }
+        return taps[index]
+    }
+
+    /** How many passes have been drawn so far in this recording, for [tap]'s numbering. */
+    private var pass = 0
+
+    /** Recomputations in the current second, logged once a second while they go on. */
+    private var recordsThisSecond = 0
+    private var secondStartedAt = 0L
+
     private fun layer(index: Int, node: DelegatableNode): GraphicsLayer {
         while (layers.size <= index) {
             layers += node.requireGraphicsContext().createGraphicsLayer().apply {
@@ -52,6 +71,8 @@ internal class FallbackBlur {
         matrix: ColorMatrix?,
         block: DrawScope.() -> Unit,
     ) {
+        countRecord()
+        pass = 0
         val levels = levelsFor(radius, size)
         val margin = if (levels == 0) 0 else (1 shl levels) * 2
         val rawSize = IntSize(size.width + 2 * margin, size.height + 2 * margin)
@@ -95,49 +116,72 @@ internal class FallbackBlur {
         source.colorFilter = matrix?.let { ColorMatrixColorFilter(it) }
         val last = source
         val lastSize = sourceSize
-        recordLayer(node, target, size = size) {
-            translate(-margin.toFloat(), -margin.toFloat()) {
-                if (levels == 0) {
-                    drawLayer(last)
-                } else {
-                    meanOf(rawSize, last, lastSize)
-                }
+        if (levels == 0) {
+            recordLayer(node, target, size = size) {
+                translate(-margin.toFloat(), -margin.toFloat()) { drawLayer(last) }
+            }
+        } else {
+            val (first, second) = recordTaps(node, last, lastSize)
+            recordLayer(node, target, size = size) {
+                translate(-margin.toFloat(), -margin.toFloat()) { meanOf(rawSize, first, second, lastSize) }
             }
         }
     }
 
     /**
-     * [from] drawn into [into] at its size, as the mean of draws half a
-     * source pixel apart: a 2x2 box when halving, a tent when doubling,
-     * whatever filtering the GPU applies to a scaled layer (the emulator's
-     * samples the nearest pixel, which alone would only skip every other one).
-     * The mean is a running one: each draw over the ones before at 1/n.
-     * Two taps, on the diagonal: each takes a different pixel on both axes.
+     * [from] drawn into [into] at its size, as the mean of two draws half a
+     * source pixel apart on both axes: two of each 2x2 block when halving, a
+     * tent when doubling, whatever filtering the GPU applies to a scaled layer
+     * (the emulator's takes the nearest pixel, which alone would skip every
+     * other one). The mean is the second draw over the first at half alpha,
+     * each tap a layer of its own whose alpha is applied to its one draw: no
+     * offscreen buffer, which a saveLayer per tap cost on every pass.
      */
     private fun DrawScope.draw(node: DelegatableNode, into: GraphicsLayer, intoSize: IntSize, from: GraphicsLayer, fromSize: IntSize) {
-        recordLayer(node, into, size = intoSize) { meanOf(intoSize, from, fromSize) }
+        val (first, second) = recordTaps(node, from, fromSize)
+        recordLayer(node, into, size = intoSize) { meanOf(intoSize, first, second, fromSize) }
     }
 
-    private fun DrawScope.meanOf(intoSize: IntSize, from: GraphicsLayer, fromSize: IntSize) {
-        val bounds = androidx.compose.ui.geometry.Rect(0f, 0f, intoSize.width.toFloat(), intoSize.height.toFloat())
-        TAPS.forEachIndexed { index, (dx, dy) ->
-            val paint = androidx.compose.ui.graphics.Paint().apply { alpha = 1f / (index + 1) }
-            drawContext.canvas.saveLayer(bounds, paint)
-            scale(
-                intoSize.width / fromSize.width.toFloat(),
-                intoSize.height / fromSize.height.toFloat(),
-                pivot = Offset.Zero,
-            ) {
-                translate(dx, dy) { drawLayer(from) }
+    private fun DrawScope.recordTaps(node: DelegatableNode, from: GraphicsLayer, fromSize: IntSize): Pair<GraphicsLayer, GraphicsLayer> {
+        val layers = TAPS.mapIndexed { index, (dx, dy) ->
+            tap(pass * TAPS.size + index, node).also { tap ->
+                tap.alpha = 1f / (index + 1)
+                recordLayer(node, tap, size = fromSize) { translate(dx, dy) { drawLayer(from) } }
             }
-            drawContext.canvas.restore()
         }
+        pass++
+        return layers[0] to layers[1]
+    }
+
+    private fun DrawScope.meanOf(intoSize: IntSize, first: GraphicsLayer, second: GraphicsLayer, fromSize: IntSize) {
+        scale(
+            intoSize.width / fromSize.width.toFloat(),
+            intoSize.height / fromSize.height.toFloat(),
+            pivot = Offset.Zero,
+        ) {
+            drawLayer(first)
+            drawLayer(second)
+        }
+    }
+
+    private fun countRecord() {
+        val now = System.currentTimeMillis()
+        if (now - secondStartedAt >= 1_000L) {
+            if (recordsThisSecond > 0) {
+                android.util.Log.d("SquareGlass", "android 11 blur: $recordsThisSecond in the last second")
+            }
+            recordsThisSecond = 0
+            secondStartedAt = now
+        }
+        recordsThisSecond++
     }
 
     fun release(node: DelegatableNode) {
         val context = node.requireGraphicsContext()
         layers.forEach(context::releaseGraphicsLayer)
         layers.clear()
+        taps.forEach(context::releaseGraphicsLayer)
+        taps.clear()
     }
 
     companion object {

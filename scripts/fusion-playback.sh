@@ -477,7 +477,14 @@ step "menus on Android $(adb shell getprop ro.build.version.release | tr -d '\r'
 open_imported page-diag
 adb shell dumpsys gfxinfo "$PKG" reset > /dev/null 2>&1
 for n in 1 2 3; do
+  adb logcat -c
   menu_time "playlist-menu-$n" 'desc == "More" and y1 < 120' 'text="(Edit|Copy link)"' || break
+  # The menu left open and untouched: the Android 11 blur must settle.
+  sleep 5
+  adb logcat -c
+  sleep 4
+  idle=$(adb logcat -d -s 'SquareGlass:*' | grep -c "android 11 blur")
+  echo "LOG blur recomputations logged over 4 s with the menu idle: $idle"
   adb shell input keyevent KEYCODE_BACK; sleep 2
 done
 for n in 1 2; do
