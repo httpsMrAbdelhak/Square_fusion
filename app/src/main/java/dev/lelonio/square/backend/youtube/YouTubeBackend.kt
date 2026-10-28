@@ -560,9 +560,20 @@ class YouTubeBackend(private val account: YouTubeAccount) : MusicBackend {
                     .map(::toCatalogTrack)
             }
 
+            // Square Fusion: a podcast found by search or saved ("MPSP…") is the
+            // show's page, not a list: read as a playlist it answers with no
+            // entries and no error, which showed every podcast as empty. Its
+            // episodes are the list the show is made from, under the same id
+            // without "MPSP", paged like any playlist.
+            id.startsWith(SHOW_ID_PREFIX) -> showEpisodes(wholePlaylist(id.removePrefix(SHOW_ID_PREFIX)))
+
             else -> playlistTracks(id, wholePlaylist(id))
         }
     }
+
+    /** A show's entries as episodes: listed as such, and never swapped for songs. */
+    private fun showEpisodes(listed: List<SongItem>): List<CatalogTrack> =
+        listed.map { toCatalogTrack(it).copy(releasedAt = "") }
 
     /**
      * A playlist's songs, unless they are what [stamp] says they were; and the
@@ -578,11 +589,18 @@ class YouTubeBackend(private val account: YouTubeAccount) : MusicBackend {
             val listed = uri.startsWith(PLAYLIST_PREFIX) || uri.startsWith(VIDEOS_PREFIX)
             if (!listed || isStation(uri)) return@withContext null to tracksOf(uri)
             val id = uri.substringAfterLast(':')
-            val first = YouTube.playlist(id).getOrThrow()
+            // Square Fusion: a show's episodes, from the list it is made of; see tracksOf.
+            val show = id.startsWith(SHOW_ID_PREFIX)
+            val listId = id.removePrefix(SHOW_ID_PREFIX)
+            val first = YouTube.playlist(listId).getOrThrow()
             val now = stampOf(first)
             if (stamp != null && now == stamp) return@withContext now to null
-            val songs = wholePlaylist(id, first)
-            now to if (uri.startsWith(VIDEOS_PREFIX)) songs.map(::toVideoTrack) else playlistTracks(id, songs)
+            val songs = wholePlaylist(listId, first)
+            now to when {
+                show -> showEpisodes(songs)
+                uri.startsWith(VIDEOS_PREFIX) -> songs.map(::toVideoTrack)
+                else -> playlistTracks(id, songs)
+            }
         }
 
     /** What a list's first page says about all of it; see [tracksIfChanged]. */
@@ -934,6 +952,8 @@ class YouTubeBackend(private val account: YouTubeAccount) : MusicBackend {
         const val TRACK_PREFIX = "ytmusic:track:"
         /** Square Fusion: the home chip that opens YouTube Music's podcasts page; not a YouTube value. */
         const val PODCASTS_PARAMS = "square-fusion:podcasts"
+        /** How YouTube Music names a podcast's own page: "MPSP" and the list it is made of. */
+        private const val SHOW_ID_PREFIX = "MPSP"
         const val PLAYLIST_PREFIX = "ytmusic:playlist:"
         const val ARTIST_PREFIX = "ytmusic:artist:"
         const val ALBUM_PREFIX = "ytmusic:album:"

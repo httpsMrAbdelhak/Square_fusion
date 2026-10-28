@@ -137,6 +137,24 @@ else
   echo "OK   no source switcher on the home page"
 fi
 shot home
+# The Podcasts chip, beside YouTube Music's own ones.
+if grep -q 'text="Podcasts"' "$OUT/home.xml"; then
+  echo "OK   Podcasts chip on the home page"
+  adb logcat -c
+  tap_where home-chip 'text == "Podcasts"'
+  sleep 15
+  dump podcasts
+  shot podcasts
+  if adb logcat -d -s 'SquareUi:*' | grep -q "youtube home failed"; then
+    echo "WARN the podcasts page did not load here: $(adb logcat -d -s 'SquareUi:*' | grep 'youtube home failed' | head -n 1 | cut -c1-200)"
+  else
+    echo "OK   podcasts page loaded ($(grep -o 'clickable="true"' "$OUT/podcasts.xml" | wc -l) tappable items)"
+  fi
+  tap_where home-chip2 'text == "Podcasts"' || true
+  sleep 3
+else
+  echo "WARN no Podcasts chip (the home page loaded no chips here)"
+fi
 
 # ── 2. Import ───────────────────────────────────────────────────────────────
 step "import $LINK"
@@ -223,6 +241,30 @@ if [ "$imported" = 1 ]; then
   fi
   adb logcat -d | grep -E "SquareYTQuality" | tail -n 3 | sed 's/^/     /'
 fi
+
+# ── 4. Apple Music import ───────────────────────────────────────────────────
+APPLE="${APPLE_TEST_PLAYLIST:-https://music.apple.com/us/playlist/todays-hits/pl.f4d106fed2bd41149aaacabb233eb5eb}"
+step "import $APPLE"
+adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
+sleep 4
+for i in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 1; done
+adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
+sleep 4
+tap_where tabs3 '(text == "Library" or desc == "Library") and y1 > 1200' || tap_where tabs4 'text == "Library" or desc == "Library"'
+sleep 4
+tap_where library2 'desc == "New playlist"' && sleep 3 \
+  && tap_where menu2 'text == "Import a playlist"' && sleep 3 \
+  && { tap_where dialog3 '"EditText" in cls' || true; } \
+  && adb shell input text "'$APPLE'" && sleep 1 && adb logcat -c \
+  && tap_where dialog4 'text == "Import"' || { echo "FAIL could not reach the import dialog again"; fail=1; }
+apple=$(wait_log "imported playlist am\.|spotify import failed" 90)
+shot apple
+case "$apple" in
+  *"imported playlist am."*) echo "OK   ${apple#*: }" ;;
+  *"import failed"*) echo "WARN Apple Music refused the import here: ${apple#*: }"
+    adb logcat -d -s 'SquareFusion:*' | tail -n 15 | sed 's/^/LOG /' ;;
+  *) echo "FAIL the Apple Music import neither finished nor failed in 90 s"; fail=1 ;;
+esac
 
 alive && echo "OK   app still running" || { echo "FAIL app stopped"; fail=1; }
 adb logcat -d | grep -E "SquareFusion|SquareYTQuality|SquareUi|AndroidRuntime|FATAL" | tail -n 200 > "$OUT/logcat.txt" || true
