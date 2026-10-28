@@ -84,7 +84,18 @@ identifiant sans `MPSP`) renvoie 22, 35 et 100 épisodes.
 Unitaires ajoutés : lecture d'une page Apple Music (titre, curateur, pochette,
 titres dans l'ordre, vidéos ignorées, page vide → indisponible) et de ses liens.
 
-## 4. À vérifier sur votre téléphone
+### Ajouts « nom et pochette, qualité affichée, profil, salutation »
+| Étape | Résultat |
+|---|---|
+| Playlist importée › More › Modifier › nouveau nom › Enregistrer : pas d'erreur, nom affiché | OK |
+| Après arrêt de l'application et nouvelle lecture depuis Spotify : nom conservé | OK |
+| Pochette personnelle (test instrumenté) : affichée, image de la source intacte, nouvelle pochette de synchro restée dessous, retour à l'originale | OK |
+| Photo de profil (test instrumenté) : image choisie gardée carrée, puis retirée | OK |
+| Accueil : salutation selon l'heure (« Good afternoon » à 14 h, sans compte) à la place de « Square » | OK |
+| Paramètres : plus de case « Soutenir le développement » | OK |
+| À propos : plus de lien vers le développeur d'origine ni de Ko-fi ; dépôt Square Fusion affiché | OK |
+| Unitaires : heures de la salutation, codecs de la ligne de qualité, durées Spotify (`trackDuration`) | OK |
+
 
 - Lecture réelle d'un titre Spotify via YouTube Music, suivant / précédent /
   aléatoire / répétition dans une playlist importée.
@@ -94,6 +105,12 @@ titres dans l'ordre, vidéos ignorées, page vide → indisponible) et de ses li
   suivis, playlist privée importée avec le compte.
 - Téléchargement d'une playlist depuis son menu, avec chaque qualité de
   téléchargement (le débit du fichier est visible dans les téléchargements).
+- Ligne de qualité sous la barre de lecture pendant une vraie lecture (YouTube
+  refuse la lecture sur l'émulateur de GitHub), en streaming et sur un titre
+  téléchargé.
+- Choix d'une pochette et d'une photo avec le sélecteur de photos d'Android.
+- Photo et nom du compte YouTube (aucun compte ici).
+- Renommage d'une playlist YouTube du compte (envoyé à YouTube).
 - Lecture des épisodes de podcast (YouTube refuse la lecture anonyme ici).
 - Mise à jour depuis l'application (Paramètres › À propos), avec
   l'installateur d'Android.
