@@ -480,6 +480,11 @@ fun SettingsScreen(
             YouTubeQualitySection()
         }
 
+        // Square Fusion: the quality downloads are kept in, apart from streaming.
+        if (shown == SettingsPage.Playback && !showSpotify && "sound" in openGroups) groupItem("download-quality", Group.SOUND) {
+            DownloadQualitySection()
+        }
+
         // The effects run on our own output, so this one holds for both backends.
         if (shown == SettingsPage.Playback && !sdkPlayback && "sound" in openGroups) groupItem("effect-quality", Group.SOUND) {
             EffectQualitySection()
@@ -1744,6 +1749,39 @@ private fun PreferredLyricsSection(showSpotify: Boolean) {
         RowDivider()
         Text(
             stringResource(R.string.lyrics_preferred_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = InkDim,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+        )
+    }
+}
+
+/** Square Fusion: the stream downloads are kept from; see YouTubeDownloads.download. */
+@Composable
+private fun DownloadQualitySection() {
+    val context = LocalContext.current
+    val store = remember(context) {
+        (context.applicationContext as dev.lelonio.square.SquareApplication).preferences
+    }
+    val chosen by store.downloadQuality.collectAsStateWithLifecycle()
+    Section(stringResource(R.string.fusion_download_quality)) {
+        dev.lelonio.square.data.PreferencesStore.DownloadQuality.entries.forEachIndexed { index, quality ->
+            if (index > 0) RowDivider()
+            ChoiceRow(
+                label = stringResource(
+                    when (quality) {
+                        dev.lelonio.square.data.PreferencesStore.DownloadQuality.LOW -> R.string.youtube_quality_low
+                        dev.lelonio.square.data.PreferencesStore.DownloadQuality.MEDIUM -> R.string.youtube_quality_medium
+                        dev.lelonio.square.data.PreferencesStore.DownloadQuality.HIGH -> R.string.youtube_quality_high
+                        dev.lelonio.square.data.PreferencesStore.DownloadQuality.MAX -> R.string.youtube_quality_max
+                    },
+                ),
+                selected = quality == chosen,
+            ) { store.setDownloadQuality(quality) }
+        }
+        RowDivider()
+        Text(
+            stringResource(R.string.fusion_download_quality_note),
             style = MaterialTheme.typography.bodySmall,
             color = InkDim,
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),

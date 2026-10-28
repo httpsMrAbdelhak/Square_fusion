@@ -3075,6 +3075,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             openLink(link)
             return true
         }
+        // An Apple Music playlist: imported into the Library like Spotify's.
+        dev.lelonio.square.fusion.spotify.AppleMusicPlaylists.playlistId(link)?.let { id ->
+            viewModelScope.launch {
+                publishPlaylist(PlaylistState(uri = SpotifyLibraryStore.PLAYLIST_PREFIX + id, loading = true))
+                importSpotifyPlaylist(link) { message ->
+                    if (message != null) publishPlaylist(_playlist.value.copy(loading = false, error = message))
+                }
+            }
+            return true
+        }
         val youtube = Regex("""(?:youtube\.com|youtu\.be)/.*[?&]list=([A-Za-z0-9_-]+)""").find(link.trim())
             ?.groupValues?.get(1)
         if (youtube != null) {
@@ -5107,6 +5117,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun canKeep(uri: String?): Boolean {
         val it = uri ?: return false
         val backend = container.activeBackend
+        // Square Fusion: a Spotify playlist is kept as its songs' YouTube Music matches.
+        if (it.startsWith(SpotifyLibraryStore.PLAYLIST_PREFIX)) return backend.id == BackendId.YOUTUBE_MUSIC
         return backend.owns(it) && when (backend.id) {
             // The official SDK streams and keeps nothing; see WebSdkRecovery.inUse.
             BackendId.SPOTIFY -> it.startsWith("spotify:") && !LocalLibrary.isSpotifyLocal(it) &&

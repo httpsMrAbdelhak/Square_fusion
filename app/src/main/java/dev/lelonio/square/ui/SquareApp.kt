@@ -3526,7 +3526,9 @@ fun SquareApp(
                             // An artist page has no keep button of its own: its
                             // three controls are the ones the reference gives an
                             // artist, so for that one page this is the way in.
-                            playlist.kind == MainViewModel.DetailKind.ARTIST &&
+                            // Square Fusion: albums and playlists here too, as
+                            // the same row; a podcast's episodes are not kept.
+                            playlist.kind != MainViewModel.DetailKind.SHOW &&
                             !offlineNow
                         if (keepable) {
                             val kept = downloadOwners[shownPlaylist.uri]

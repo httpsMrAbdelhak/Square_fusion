@@ -13,7 +13,7 @@
     <string name="fusion_spotify_expired">Session Spotify expirée. Reconnectez Spotify dans les paramètres.</string>
     <string name="fusion_import_playlist">Importer une playlist</string>
     <string name="fusion_import">Importer</string>
-    <string name="fusion_import_hint">Lien Spotify ou YouTube Music</string>
+    <string name="fusion_import_hint">Lien Spotify, YouTube Music ou Apple Music</string>
     <string name="fusion_import_bad_link">Ce n’est pas un lien de playlist.</string>
     <string name="fusion_app_icon">Icône de l\'application</string>
     <string name="fusion_app_icon_summary">Icônes Square ou BitChord</string>
@@ -28,4 +28,6 @@
     <string name="fusion_rate_applied">Fréquence actuelle (lue sur l\'écran)</string>
     <string name="fusion_rate_not_confirmed">%1$d Hz a été demandé mais n\'a pas été confirmé par le système.</string>
     <string name="fusion_performance_note">Désactivé : comportement de Square. Activé : la fréquence est demandée à Android, qui peut en décider autrement (économie d\'énergie, chauffe). Une fréquence élevée peut consommer plus de batterie.</string>
+    <string name="fusion_download_quality">Qualité des téléchargements</string>
+    <string name="fusion_download_quality_note">S’applique aux titres téléchargés à partir de maintenant ; les titres déjà téléchargés gardent la leur. Les débits sont ceux que YouTube indique pour chaque flux.</string>
 </resources>

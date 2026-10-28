@@ -1,6 +1,7 @@
 package dev.lelonio.square.fusion
 
 import dev.lelonio.square.backend.youtube.AudioQuality
+import dev.lelonio.square.fusion.spotify.AppleMusicPlaylists
 import dev.lelonio.square.fusion.spotify.SpotifyEmbed
 import dev.lelonio.square.fusion.spotify.SpotifyLinks
 import dev.lelonio.square.fusion.spotify.SpotifyMatches
@@ -170,6 +171,44 @@ class FusionLogicTest {
         assertEquals("cid", page.clientId)
         try {
             SpotifyEmbed.parse("<html>Page not found</html>")
+            throw AssertionError("expected unavailable")
+        } catch (_: SpotifyPlaylistUnavailable) {
+        }
+    }
+
+    @Test
+    fun appleMusicLinksAndPage() {
+        assertEquals(
+            "am.us.pl.f4d106fed2bd41149aaacabb233eb5eb",
+            AppleMusicPlaylists.playlistId("https://music.apple.com/us/playlist/todays-hits/pl.f4d106fed2bd41149aaacabb233eb5eb?l=fr"),
+        )
+        assertEquals("am.fr.pl.u-AbC123", AppleMusicPlaylists.playlistId("https://music.apple.com/fr/playlist/pl.u-AbC123"))
+        assertNull(AppleMusicPlaylists.playlistId("https://music.apple.com/us/album/housewife/6822497770"))
+        assertNull(AppleMusicPlaylists.playlistId("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"))
+
+        val data = """{"data":[{"data":{"sections":[
+          {"itemKind":"containerDetailHeaderLockup","items":[{"title":"Today’s Hits","trackCount":50,
+            "subtitleLinks":[{"title":"Apple Music Hits"}],"artwork":{"dictionary":{"url":"https://is1/x/{w}x{h}{c}.{f}"}}}]},
+          {"itemKind":"trackLockup","items":[
+            {"title":"Housewife","artistName":"Tate McRae","duration":208810,
+             "tertiaryLinks":[{"title":"Housewife - Single"}],
+             "contentDescriptor":{"kind":"song","identifiers":{"storeAdamID":"6822497774"}}},
+            {"title":"A video","contentDescriptor":{"kind":"musicVideo","identifiers":{"storeAdamID":"1"}}},
+            {"title":"Man I Need","subtitleLinks":[{"title":"Olivia Dean"}],"duration":185000,
+             "contentDescriptor":{"kind":"song","identifiers":{"storeAdamID":"42"}}}
+          ]}]}}]}"""
+        val page = AppleMusicPlaylists.parse("am.us.pl.x", "<script type=\"application/json\" id=\"serialized-server-data\">$data</script>")
+        assertEquals("Today’s Hits", page.playlist.name)
+        assertEquals("Apple Music Hits", page.playlist.owner)
+        assertEquals("https://is1/x/600x600bb.jpg", page.playlist.imageUrl)
+        assertEquals(50, page.listedCount)
+        assertEquals(listOf("Housewife", "Man I Need"), page.tracks.map { it.title })
+        assertEquals("am6822497774", page.tracks[0].id)
+        assertEquals("Housewife - Single", page.tracks[0].album)
+        assertEquals("Olivia Dean", page.tracks[1].artist)
+        assertEquals(185000, page.tracks[1].durationMs)
+        try {
+            AppleMusicPlaylists.parse("am.us.pl.x", "<html>Not found</html>")
             throw AssertionError("expected unavailable")
         } catch (_: SpotifyPlaylistUnavailable) {
         }

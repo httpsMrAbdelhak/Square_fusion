@@ -633,7 +633,7 @@
     <string name="youtube_quality_auto">自動：Wi‑Fiでは高音質、モバイルデータ通信では低音質</string>
     <string name="youtube_quality_high">高音質（約128 kbps）</string>
     <string name="youtube_quality_low">低音質（データ使用量を節約、約48 kbps）</string>
-    <string name="youtube_quality_note">次の曲から適用されます。ダウンロードには常に最高音質が適用されます。</string>
+    <string name="youtube_quality_note">次の曲から適用されます。</string>
     <string name="lyrics_options">歌詞</string>
     <string name="lyrics_source_title">歌詞の取得元</string>
     <string name="lyrics_style_title">表示スタイル</string>

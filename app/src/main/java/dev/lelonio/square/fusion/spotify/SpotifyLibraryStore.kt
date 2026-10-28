@@ -103,8 +103,8 @@ object SpotifyLibraryStore {
      * ones need the connected account to have access.
      */
     suspend fun import(link: String): Result<Playlist> {
-        val id = SpotifyLinks.playlistId(link)
-            ?: return Result.failure(IllegalArgumentException("Not a Spotify playlist link"))
+        val id = SpotifyLinks.playlistId(link) ?: AppleMusicPlaylists.playlistId(link)
+            ?: return Result.failure(IllegalArgumentException("Not a Spotify or Apple Music playlist link"))
         return SpotifyFreeAccount.call(requireAccount = false) {
             val (info, songs) = read(id)
             val playlist = Playlist(id, info.name, info.owner, info.imageUrl ?: songs.firstOrNull()?.imageUrl, imported = true)
@@ -128,6 +128,8 @@ object SpotifyLibraryStore {
      * reaches it is read again in full with the page's anonymous token.
      */
     private suspend fun read(id: String, onPage: (List<SpotifyTrack>) -> Unit = {}): Pair<SpotifyPlaylist, List<SpotifyTrack>> {
+        // Square Fusion: an Apple Music playlist, from its own public page.
+        if (AppleMusicPlaylists.isApple(id)) return AppleMusicPlaylists.playlist(id).let { it.playlist to it.tracks }
         if (SpotifyFreeAccount.cookie().isNotBlank()) {
             try {
                 return SpotifyFreeLibrary.playlistInfo(id) to SpotifyFreeLibrary.tracks(id, onPage)
