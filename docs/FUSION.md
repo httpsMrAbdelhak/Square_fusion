@@ -67,6 +67,12 @@ YouTube liste pour le morceau :
   playlist apparaît dans la Bibliothèque. Une playlist publique s'importe sans
   compte ; une playlist privée demande le compte connecté qui y a accès.
 - Un lien de playlist YouTube Music (`…list=…`) ouvre cette playlist.
+- Un lien Apple Music (`music.apple.com/<pays>/playlist/…/pl.…`) : titre,
+  curateur, pochette et titres (titre, artiste, album, durée) lus sur la page
+  publique d'Apple, dans l'ordre, sans compte. Une playlist personnelle
+  (`pl.u-…`) non partagée publiquement ou retirée est signalée indisponible.
+  Si la page publique ne liste qu'une partie des titres, seule cette partie
+  est importée (le journal l'indique).
 - Erreurs : lien invalide, playlist privée ou introuvable, réseau, session
   expirée ; un message court, rien ne bloque l'application.
 - Appui long sur une playlist importée › « Retirer de la bibliothèque ».
@@ -83,6 +89,42 @@ YouTube liste pour le morceau :
 - La file garde l'ordre de la playlist ; suivant, précédent, aléatoire et
   répétition sont ceux de Square.
 - Aucune lecture Spotify Premium n'est utilisée.
+
+### Téléchargement des playlists
+- Menu d'une playlist, d'un album ou d'un artiste ouvert › « Télécharger » :
+  la même ligne, la même icône et le même système de téléchargement que
+  Square (file d'attente, progression, reprise, fichiers partagés entre
+  listes sans doublon, ordre de la liste conservé).
+- Les playlists Spotify et Apple Music importées se téléchargent aussi :
+  chaque titre est téléchargé depuis sa correspondance YouTube Music. Un titre
+  sans correspondance fiable est marqué en échec, sans réessais inutiles.
+- Un podcast YouTube Music ouvert se télécharge de la même façon (ses épisodes).
+
+### Qualité des téléchargements — Paramètres › Lecture › Son
+Basse, Moyenne, Haute, Maximale (par défaut, comme avant), indépendante de la
+qualité d'écoute. Le flux est réellement choisi selon ce réglage au moment du
+téléchargement, y compris pour les playlists ; ~256 kbps seulement avec un
+compte YouTube Music Premium connecté. Le débit enregistré pour le fichier est
+celui annoncé par YouTube pour le flux choisi. Les fichiers déjà téléchargés
+gardent leur qualité.
+
+### Podcasts
+- Accueil : puce « Podcasts » à côté de celles de YouTube Music (ajoutée
+  seulement si YouTube n'en propose pas déjà une). Elle affiche la page
+  podcasts de YouTube Music (émissions, épisodes, sélections), personnalisée
+  par YouTube quand un compte est connecté, précédée des nouveaux épisodes des
+  podcasts suivis.
+- Correction : un podcast trouvé par la recherche ou enregistré s'ouvrait sur
+  « Aucun titre ». Square lisait la page de l'émission (`MPSP…`) comme une
+  playlist, ce à quoi YouTube répond par une liste vide sans erreur. Les
+  épisodes sont maintenant lus dans la liste dont l'émission est faite.
+  Vérifié sur « Flippe & Go Sleep » et « SIP & GOSSIP » (Maghla) et « Les
+  Grosses Têtes » : 0 épisode avant, 22, 35 et 100 après.
+
+### Recherche
+Le filtre choisi (Titres, Vidéos, Artistes, Albums, Podcasts…) reste
+sélectionné au retour d'un résultat, avec la liste et sa position. Une
+nouvelle recherche revient à « Tout ».
 
 ### Icônes — Paramètres › Application › Icône de l'application
 Icône Square par défaut ; 13 variantes BitChord (BitChord, Liquid Glass,
