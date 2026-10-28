@@ -149,6 +149,21 @@ if grep -q 'text="Podcasts"' "$OUT/home.xml"; then
     echo "WARN the podcasts page did not load here: $(adb logcat -d -s 'SquareUi:*' | grep 'youtube home failed' | head -n 1 | cut -c1-200)"
   else
     echo "OK   podcasts page loaded ($(grep -o 'clickable="true"' "$OUT/podcasts.xml" | wc -l) tappable items)"
+    # A show from that page opens with its episodes, not "No songs".
+    if tap_where podcasts-card 'clickable and y1 > 500 and (x2 - x1) > 150 and (y2 - y1) > 150'; then
+      sleep 15
+      dump show
+      shot show
+      if grep -q 'text="No songs"' "$OUT/show.xml"; then
+        echo "FAIL a podcast opened from the home page shows no episodes"; fail=1
+      else
+        echo "OK   podcast opened with $(grep -o 'clickable="true"' "$OUT/show.xml" | wc -l) tappable rows, no \"No songs\""
+      fi
+      adb shell input keyevent KEYCODE_BACK
+      sleep 3
+    else
+      echo "WARN no podcast card to open on the podcasts page"
+    fi
   fi
   tap_where home-chip2 'text == "Podcasts"' || true
   sleep 3
