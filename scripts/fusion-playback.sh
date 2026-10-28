@@ -474,6 +474,9 @@ menu_time() {
   return 1
 }
 step "menus on Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
+screen_h=$(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -n 1 | cut -dx -f2)
+# Closes a menu as a finger does: a tap on the dimmed page beside it.
+close_menu() { adb shell input tap 6 $((screen_h / 2)); sleep 2; }
 open_imported page-diag
 adb shell dumpsys gfxinfo "$PKG" reset > /dev/null 2>&1
 for n in 1 2 3; do
@@ -485,12 +488,17 @@ for n in 1 2 3; do
   sleep 4
   idle=$(adb logcat -d -s 'SquareGlass:*' | grep -c "android 11 blur")
   echo "LOG blur recomputations logged over 4 s with the menu idle: $idle"
-  adb shell input keyevent KEYCODE_BACK; sleep 2
+  close_menu
 done
-for n in 1 2; do
+for n in 1 2 3; do
   menu_time "song-menu-$n" 'desc == "More" and y1 > 150' 'text="(Go to artist|Copy link|Add to queue)"' || break
-  adb shell input keyevent KEYCODE_BACK; sleep 2
+  close_menu
 done
+# An action from a song's menu, then the page is still usable.
+if menu_time "song-menu-download" 'desc == "More" and y1 > 150' 'text="(Download|Go to artist)"'; then
+  if tap_where song-download 'text == "Download"'; then sleep 3; echo "OK   Download tapped from the song menu"; else close_menu; fi
+fi
+menu_time "playlist-menu-after" 'desc == "More" and y1 < 120' 'text="(Edit|Copy link)"' && close_menu
 adb shell dumpsys gfxinfo "$PKG" | grep -E "Total frames|Janky frames|90th|99th|Number Frame deadline missed" | sed 's/^/LOG /'
 adb logcat -d | grep -E "Choreographer.*Skipped|ANR in|Input dispatching timed out" | tail -n 5 | sed 's/^/LOG /'
 alive || { echo "FAIL app stopped during the menus"; fail=1; }
