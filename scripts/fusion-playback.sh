@@ -299,22 +299,42 @@ PY
 if tap_where search-tab 'desc == "Search" or text == "Search"'; then
   sleep 3
   tap_where search-field '"EditText" in cls' || true
-  adb shell input text "Flippe%sGo%sSleep"
+  # Typed in pieces: the emulator's keyboard drops letters from a long burst.
+  for word in Flippe Go Sleep; do adb shell input text "$word"; sleep 1; adb shell input keyevent KEYCODE_SPACE; sleep 1; done
   adb shell input keyevent KEYCODE_ENTER
   sleep 12
   dump results1
-  tap_where results 'text == "Podcasts"' || { echo "WARN no Podcasts filter in the results"; texts results1 | head -n 40; }
-  sleep 4
+  # The filters are a row wider than the screen: brought into view first.
+  if ! tap_where results 'text == "Podcasts" and y1 < 150'; then
+    chip_y=$(python3 - "$OUT/results1.xml" <<'PY'
+import re, sys
+xml = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r'text="Songs"[^>]*bounds="\[\d+,(\d+)\]\[\d+,(\d+)\]"', xml)
+print((int(m.group(1)) + int(m.group(2))) // 2 if m else 57)
+PY
+)
+    adb shell input swipe 300 "$chip_y" 30 "$chip_y" 400
+    sleep 2
+    dump results1b
+    tap_where results1b 'text == "Podcasts"' || { echo "WARN no Podcasts filter in the results"; texts results1b | head -n 30; }
+  fi
+  sleep 5
   dump results2
   shot results
-  if tap_where results3 '"Flippe" in text and y1 > 250'; then
+  if [ "$(selected_chip results2 Podcasts)" = yes ]; then echo "OK   Podcasts filter selected"; else echo "WARN the Podcasts filter does not read as selected"; fi
+  if tap_where results3 '"flippe" in text.lower() and "EditText" not in cls and y1 > 90'; then
     sleep 15
     dump podcast
     shot podcast
     if grep -q 'text="No songs"' "$OUT/podcast.xml"; then
       echo "FAIL the podcast opened from search shows no episodes"; fail=1
     else
-      echo "OK   podcast opened from search with $(grep -o 'text="[^"]*FLIPPE[^"]*"' "$OUT/podcast.xml" | wc -l) episode rows on screen"
+      rows=$(grep -o 'text="[^"]*FLIPPE[^"]*"' "$OUT/podcast.xml" | wc -l)
+      if [ "$rows" -gt 0 ]; then
+        echo "OK   podcast opened from search with $rows episode rows on screen"
+      else
+        echo "WARN the opened page shows no episode row"; texts podcast | head -n 30
+      fi
     fi
     adb shell input keyevent KEYCODE_BACK
     sleep 4
@@ -326,6 +346,7 @@ if tap_where search-tab 'desc == "Search" or text == "Search"'; then
       echo "WARN cannot tell the selected chip from the screen dump"
     else
       echo "FAIL the Podcasts filter was lost on the way back"; fail=1
+      texts back | head -n 30
     fi
   else
     echo "WARN no podcast result to open (YouTube search unavailable here?)"

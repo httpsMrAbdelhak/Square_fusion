@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +78,8 @@ fun FilterChip(
             .background(fill)
             .border(1.dp, edge, CircleShape)
             .pressable(onClick, shape = CircleShape, pressedScale = 0.94f)
+            // Square Fusion: said as selected, for TalkBack (and the emulator test).
+            .semantics { this.selected = selected }
             .defaultMinSize(minHeight = CHIP_HEIGHT)
             .padding(horizontal = CHIP_PADDING, vertical = 7.dp),
         contentAlignment = Alignment.Center,
