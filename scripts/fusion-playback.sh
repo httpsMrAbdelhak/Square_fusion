@@ -470,6 +470,7 @@ menu_time() {
     sleep 0.5
   done
   echo "FAIL $1 did not open within 20 s"; fail=1
+  texts "$1" | head -n 20
   trace_main "$1"
   return 1
 }
@@ -490,14 +491,18 @@ for n in 1 2 3; do
   echo "LOG blur recomputations logged over 4 s with the menu idle: $idle"
   close_menu
 done
+# The songs up into the middle of the screen, clear of the mini player.
+adb shell input swipe 160 $((screen_h * 3 / 4)) 160 $((screen_h / 4)) 500; sleep 3
+song_more="desc == 'More' and y1 > 150 and y2 < $((screen_h * 3 / 4))"
 for n in 1 2 3; do
-  menu_time "song-menu-$n" 'desc == "More" and y1 > 150' 'text="(Go to artist|Copy link|Add to queue)"' || break
+  menu_time "song-menu-$n" "$song_more" 'text="(Go to artist|Copy link|Add to queue)"' || break
   close_menu
 done
 # An action from a song's menu, then the page is still usable.
-if menu_time "song-menu-download" 'desc == "More" and y1 > 150' 'text="(Download|Go to artist)"'; then
+if menu_time "song-menu-download" "$song_more" 'text="(Download|Go to artist)"'; then
   if tap_where song-download 'text == "Download"'; then sleep 3; echo "OK   Download tapped from the song menu"; else close_menu; fi
 fi
+adb shell input swipe 160 $((screen_h / 4)) 160 $((screen_h * 3 / 4)) 500; sleep 3
 menu_time "playlist-menu-after" 'desc == "More" and y1 < 120' 'text="(Edit|Copy link)"' && close_menu
 adb shell dumpsys gfxinfo "$PKG" | grep -E "Total frames|Janky frames|90th|99th|Number Frame deadline missed" | sed 's/^/LOG /'
 adb logcat -d | grep -E "Choreographer.*Skipped|ANR in|Input dispatching timed out" | tail -n 5 | sed 's/^/LOG /'
