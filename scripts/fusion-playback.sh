@@ -445,7 +445,11 @@ open_imported() {
 }
 open_imported page-a
 if tap_where page-more 'desc == "More" and y1 < 120'; then
-  sleep 2
+  sleep 4
+  # Once more if the sheet is not up yet.
+  if ! grep -q 'text="Edit"' <(adb shell uiautomator dump /dev/tty 2>/dev/null); then
+    tap_where page-more2 'desc == "More" and y1 < 120'; sleep 5
+  fi
   if tap_where edit-menu 'text == "Edit"'; then
     sleep 3
     tap_where edit-field '"EditText" in cls' || true
