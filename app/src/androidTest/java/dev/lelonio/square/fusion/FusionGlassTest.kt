@@ -41,8 +41,9 @@ class FusionGlassTest {
     @get:Rule
     val rule = createComposeRule()
 
-    private fun spread(bitmap: android.graphics.Bitmap): Double {
-        val y = bitmap.height / 2
+    /** How much the brightness varies along a row, [row] the fraction of the height. */
+    private fun spread(bitmap: android.graphics.Bitmap, row: Float = 0.5f): Double {
+        val y = (bitmap.height * row).toInt()
         val values = (bitmap.width / 4 until bitmap.width * 3 / 4).map { x ->
             val c = bitmap.getPixel(x, y)
             0.299 * android.graphics.Color.red(c) + 0.587 * android.graphics.Color.green(c) + 0.114 * android.graphics.Color.blue(c)
@@ -91,10 +92,11 @@ class FusionGlassTest {
             }
         }
         rule.waitForIdle()
-        val stripes = spread(rule.onNodeWithTag("stripes").captureToImage().asAndroidBitmap())
+        // Near the top, above the pane.
+        val stripes = spread(rule.onNodeWithTag("stripes").captureToImage().asAndroidBitmap(), row = 0.08f)
         val glass = spread(rule.onNodeWithTag("glass").captureToImage().asAndroidBitmap())
         android.util.Log.i("SquareFusion", "glass test on API ${Build.VERSION.SDK_INT}: stripes spread $stripes, under the glass $glass")
-        assertTrue("the stripes are there ($stripes)", stripes > 80.0)
+        assertTrue("the stripes are there ($stripes; under the glass $glass)", stripes > 80.0)
         assertTrue("the glass blurs them ($glass against $stripes)", glass < 20.0)
     }
 }
