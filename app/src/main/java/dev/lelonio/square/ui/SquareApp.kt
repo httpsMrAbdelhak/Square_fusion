@@ -3482,8 +3482,10 @@ fun SquareApp(
                         // "delete the list an editor made", and the app offering
                         // one meant offering a button whose only outcome was an
                         // error.
+                        // Square Fusion: and a Spotify or Apple Music playlist of the
+                        // Library, whose name and cover are then kept in Square.
                         val editable = !shownPlaylist.uri.endsWith(":collection") &&
-                            playlistMenuMine
+                            (playlistMenuMine || shownPlaylist.uri.startsWith(dev.lelonio.square.fusion.spotify.SpotifyLibraryStore.PLAYLIST_PREFIX))
                         if (editable) TrackSheetAction(
                             stringResource(R.string.edit_playlist),
                             PhosphorIcons.Regular.PencilSimple,
@@ -3625,6 +3627,12 @@ fun SquareApp(
                         loading = edit.loading,
                         onCreate = { name, description, public, cover ->
                             viewModel.savePlaylist(name, description, public, cover)
+                        },
+                        pickCover = true,
+                        originalCover = edit.originalCover,
+                        customCover = edit.customCover,
+                        onSave = { name, description, public, cover, resetCover ->
+                            viewModel.savePlaylist(name, description, public, cover, resetCover)
                         },
                         onDismiss = viewModel::closeEditPlaylist,
                     )

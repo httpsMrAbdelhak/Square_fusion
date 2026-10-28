@@ -295,7 +295,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             else -> UiState.LoggedOut
         },
     )
-    val state: StateFlow<UiState> = _state.asStateFlow()
+    // Square Fusion: shown with the names and covers chosen in Square laid
+    // over the source's (PlaylistCustomizations); _state keeps the source's own.
+    val state: StateFlow<UiState> = combine(_state, dev.lelonio.square.fusion.PlaylistCustomizations.all) { state, _ ->
+        if (state is UiState.Ready) {
+            state.copy(playlists = state.playlists.map(dev.lelonio.square.fusion.PlaylistCustomizations::apply))
+        } else {
+            state
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, _state.value)
 
     /**
      * The home feed's catalogue sections.
@@ -1565,7 +1573,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private val _playlist = MutableStateFlow(PlaylistState())
-    val playlist: StateFlow<PlaylistState> = _playlist.asStateFlow()
+    val playlist: StateFlow<PlaylistState> = combine(_playlist, dev.lelonio.square.fusion.PlaylistCustomizations.all) { page, all ->
+        // Square Fusion: the page under the name and cover chosen in Square; see state.
+        val custom = page.uri?.let { all[it] }
+        if (custom == null) page else page.copy(name = custom.name ?: page.name, artworkUrl = custom.cover ?: page.artworkUrl)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, _playlist.value)
 
     /** Search box contents and results. */
     data class SearchState(
@@ -5300,6 +5312,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val loading: Boolean = false,
         val busy: Boolean = false,
         val error: String? = null,
+        /** Square Fusion: the source's own cover, under one chosen in Square; null when none was chosen. */
+        val originalCover: String? = null,
+        val customCover: Boolean = false,
     )
 
     private val _editingPlaylist = MutableStateFlow<EditPlaylistState?>(null)
@@ -5308,12 +5323,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Opens the edit sheet, reading what the playlist has now where the source keeps it. */
     fun openEditPlaylist(playlist: CatalogPlaylist) {
         val backend = container.activeBackend
-        val plain = dev.lelonio.square.backend.PlaylistDetails(playlist.name, "", false, playlist.artworkUrl)
+        // Square Fusion: the sheet starts from what Square shows, the choices
+        // made here included, and knows the source's cover to go back to.
+        val custom = dev.lelonio.square.fusion.PlaylistCustomizations.get(playlist.uri)
+        val source = (_state.value as? UiState.Ready)?.playlists?.firstOrNull { it.uri == playlist.uri }
+            ?: _playlist.value.takeIf { it.uri == playlist.uri }?.let { CatalogPlaylist(it.uri.orEmpty(), it.name, it.artworkUrl) }
+        val shown = dev.lelonio.square.fusion.PlaylistCustomizations.apply(playlist)
+        val plain = dev.lelonio.square.backend.PlaylistDetails(shown.name, "", false, shown.artworkUrl)
+        val start = EditPlaylistState(
+            shown,
+            originalCover = source?.artworkUrl,
+            customCover = custom?.cover != null,
+        )
         if (!backend.describesPlaylists) {
-            _editingPlaylist.value = EditPlaylistState(playlist, details = plain)
+            _editingPlaylist.value = start.copy(details = plain)
             return
         }
-        _editingPlaylist.value = EditPlaylistState(playlist, loading = true)
+        _editingPlaylist.value = start.copy(loading = true)
         viewModelScope.launch {
             val details = runCatching { backend.playlistDetails(playlist.uri) }
                 .onFailure { android.util.Log.w(TAG, "playlist details unavailable: ${describe(it)}") }
@@ -5329,55 +5355,62 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Saves the edit sheet. The sheet waits for the service, as the new one
-     * does, and the cover follows as it does there: a cover that fails leaves
-     * the rest saved.
+     * Saves the edit sheet.
+     *
+     * Square Fusion: the name goes to the source only where the account may
+     * change it there (its own YouTube Music playlists, as YouTube says). It
+     * used to be sent for every row of the library, and YouTube refuses a
+     * playlist the account only saved, or Liked Music, which came back as
+     * "check your connection" and lost the name. Now, wherever the source
+     * cannot take it, or does not answer, the name is kept in Square
+     * (PlaylistCustomizations) and shown everywhere, without an error: the
+     * change the listener asked for is made. The cover is always Square's
+     * own, never uploaded: a Spotify playlist keeps its cover on Spotify.
      */
-    fun savePlaylist(name: String, description: String, public: Boolean, cover: android.net.Uri?) {
+    fun savePlaylist(name: String, description: String, public: Boolean, cover: android.net.Uri?, resetCover: Boolean = false) {
         val editing = _editingPlaylist.value ?: return
         if (editing.busy) return
         val uri = editing.playlist.uri
         val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
         _editingPlaylist.value = editing.copy(busy = true, error = null)
         viewModelScope.launch {
             val backend = container.activeBackend
-            runCatching { backend.updatePlaylist(uri, trimmed, description, public) }
-                .onSuccess {
-                    (_state.value as? UiState.Ready)?.let { ready ->
-                        _state.value = ready.copy(
-                            playlists = ready.playlists.map { if (it.uri == uri) it.copy(name = trimmed) else it },
-                        )
-                    }
-                    if (_playlist.value.uri == uri) {
-                        _playlist.value = _playlist.value.copy(name = trimmed, description = description.trim())
-                    }
-                    invalidateContext(uri)
-                    if (cover != null && backend.describesPlaylists) {
-                        runCatching {
-                            val jpeg = withContext(Dispatchers.Default) { coverJpeg(cover) }
-                            backend.setPlaylistCover(uri, jpeg)
-                        }.onSuccess {
-                            coverCache.remove(uri)
-                            fetchUploadedCover(uri)
-                        }.onFailure {
-                            android.util.Log.e(TAG, "playlist cover failed: ${chain(it)}", it)
-                            val permission = describe(it).let { why -> "401" in why || "403" in why }
-                            android.widget.Toast.makeText(
-                                getApplication(),
-                                string(if (permission) R.string.cover_needs_permission else R.string.cover_failed),
-                                android.widget.Toast.LENGTH_LONG,
-                            ).show()
-                        }
-                    }
-                    _editingPlaylist.value = null
-                }
-                .onFailure {
-                    android.util.Log.e(TAG, "edit playlist failed: ${chain(it)}", it)
-                    _editingPlaylist.value = _editingPlaylist.value?.copy(
-                        busy = false,
-                        error = string(R.string.save_playlist_failed),
+            val custom = dev.lelonio.square.fusion.PlaylistCustomizations
+            val sourceName = (_state.value as? UiState.Ready)?.playlists?.firstOrNull { it.uri == uri }?.name
+                ?: _playlist.value.takeIf { it.uri == uri }?.name
+            val writable = backend.describesPlaylists || backend.canWriteTo(uri)
+            val sent = writable && (trimmed != sourceName || backend.describesPlaylists) && runCatching {
+                backend.updatePlaylist(uri, trimmed, description, public)
+            }.onFailure {
+                android.util.Log.w(TAG, "playlist not renamed at its source, kept in Square: ${chain(it)}")
+            }.isSuccess
+            if (sent) {
+                // The source has it now: its own name is shown again from here on.
+                (_state.value as? UiState.Ready)?.let { ready ->
+                    _state.value = ready.copy(
+                        playlists = ready.playlists.map { if (it.uri == uri) it.copy(name = trimmed) else it },
                     )
                 }
+                if (_playlist.value.uri == uri) {
+                    _playlist.value = _playlist.value.copy(name = trimmed, description = description.trim())
+                }
+                custom.setName(uri, null)
+                invalidateContext(uri)
+            } else {
+                custom.setName(uri, trimmed.takeIf { it != sourceName })
+            }
+            when {
+                resetCover -> custom.clearCover(uri)
+                cover != null -> runCatching {
+                    val jpeg = withContext(Dispatchers.Default) { coverJpeg(cover) }
+                    withContext(Dispatchers.IO) { custom.setCover(uri, jpeg) }
+                }.onFailure {
+                    android.util.Log.e(TAG, "playlist cover not kept: ${chain(it)}", it)
+                    android.widget.Toast.makeText(getApplication(), string(R.string.cover_failed), android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+            _editingPlaylist.value = null
         }
     }
 
@@ -5480,6 +5513,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         runCatching { container.activeBackend.deletePlaylist(uri) }
+            .onSuccess { dev.lelonio.square.fusion.PlaylistCustomizations.forget(uri) }
             .onFailure {
                 android.util.Log.e(TAG, "delete playlist failed: ${chain(it)}", it)
                 val current = _state.value as? UiState.Ready

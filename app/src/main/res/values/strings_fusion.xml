@@ -30,4 +30,5 @@
     <string name="fusion_performance_note">Off: Square\'s own behaviour. On: the rate is asked of Android, which may decide otherwise (battery saver, heat). A higher rate can use more battery.</string>
     <string name="fusion_download_quality">Download quality</string>
     <string name="fusion_download_quality_note">Applies to songs downloaded from now on; songs already downloaded keep theirs. Rates are the ones YouTube states for each stream.</string>
+    <string name="fusion_original_cover">Original cover</string>
 </resources>

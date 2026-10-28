@@ -30,4 +30,5 @@
     <string name="fusion_performance_note">Désactivé : comportement de Square. Activé : la fréquence est demandée à Android, qui peut en décider autrement (économie d\'énergie, chauffe). Une fréquence élevée peut consommer plus de batterie.</string>
     <string name="fusion_download_quality">Qualité des téléchargements</string>
     <string name="fusion_download_quality_note">S’applique aux titres téléchargés à partir de maintenant ; les titres déjà téléchargés gardent la leur. Les débits sont ceux que YouTube indique pour chaque flux.</string>
+    <string name="fusion_original_cover">Pochette d’origine</string>
 </resources>

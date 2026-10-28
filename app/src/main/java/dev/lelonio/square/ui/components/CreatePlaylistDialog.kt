@@ -80,19 +80,35 @@ fun CreatePlaylistDialog(
     initial: dev.lelonio.square.backend.PlaylistDetails? = null,
     /** Waiting for [initial]: the fields are not shown half-filled. */
     loading: Boolean = false,
+    /** Square Fusion: a cover can be chosen even where the source keeps none; see PlaylistCustomizations. */
+    pickCover: Boolean = describes,
+    /** Square Fusion: the source's own cover, offered back when one was chosen in Square. */
+    originalCover: String? = null,
+    customCover: Boolean = false,
+    /** Square Fusion: the same as [onCreate], saying whether the source's cover was asked back. */
+    onSave: ((name: String, description: String, public: Boolean, cover: Uri?, resetCover: Boolean) -> Unit)? = null,
 ) {
     var name by rememberSaveable(initial) { mutableStateOf(initial?.name.orEmpty()) }
     var description by rememberSaveable(initial) { mutableStateOf(initial?.description.orEmpty()) }
     var public by rememberSaveable(initial) { mutableStateOf(initial?.public ?: false) }
     var cover by rememberSaveable { mutableStateOf<Uri?>(null) }
+    var resetCover by rememberSaveable { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     // The system's photo picker: no permission to ask for, and only the one
     // picture it hands back is ever readable.
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked ->
-        if (picked != null) cover = picked
+        if (picked != null) {
+            cover = picked
+            resetCover = false
+        }
     }
     val shape = RoundedCornerShape(24.dp)
-    val create = { if (name.isNotBlank() && !busy) onCreate(name, description, public, cover) }
+    val create = {
+        if (name.isNotBlank() && !busy) {
+            onSave?.invoke(name, description, public, cover, resetCover) ?: onCreate(name, description, public, cover)
+        }
+    }
+    val existing = if (resetCover) originalCover else initial?.artworkUrl
 
     Dialog(onDismissRequest = { if (!busy) onDismiss() }) {
         Column(
@@ -114,7 +130,7 @@ fun CreatePlaylistDialog(
                 Modifier.padding(top = 18.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (describes) {
+                if (pickCover) {
                     Box(
                         Modifier
                             .size(COVER)
@@ -125,7 +141,7 @@ fun CreatePlaylistDialog(
                             },
                         contentAlignment = Alignment.Center,
                     ) {
-                        val shown: Any? = cover ?: initial?.artworkUrl
+                        val shown: Any? = cover ?: existing
                         if (shown != null) {
                             AsyncImage(
                                 model = shown,
@@ -146,7 +162,7 @@ fun CreatePlaylistDialog(
                 Column(
                     Modifier
                         .weight(1f)
-                        .padding(start = if (describes) 14.dp else 0.dp),
+                        .padding(start = if (pickCover) 14.dp else 0.dp),
                 ) {
                     Field(
                         value = name,
@@ -157,10 +173,10 @@ fun CreatePlaylistDialog(
                         onDone = create,
                         modifier = Modifier.focusRequester(focus),
                     )
-                    if (describes) {
+                    if (pickCover) {
                         Text(
                             stringResource(
-                                if (cover == null && initial?.artworkUrl == null) R.string.choose_cover else R.string.change_cover,
+                                if (cover == null && existing == null) R.string.choose_cover else R.string.change_cover,
                             ),
                             style = MaterialTheme.typography.bodySmall,
                             color = InkDim,
@@ -172,6 +188,21 @@ fun CreatePlaylistDialog(
                                 }
                                 .padding(horizontal = 4.dp, vertical = 2.dp),
                         )
+                        // Square Fusion: back to the source's cover, once one was chosen here.
+                        if ((customCover || cover != null) && !resetCover) {
+                            Text(
+                                stringResource(R.string.fusion_original_cover),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = InkDim,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .clickable(enabled = !busy) {
+                                        cover = null
+                                        resetCover = customCover
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                            )
+                        }
                     }
                 }
             }

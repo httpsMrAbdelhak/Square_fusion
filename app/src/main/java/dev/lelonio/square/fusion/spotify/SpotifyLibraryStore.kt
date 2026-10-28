@@ -159,6 +159,7 @@ object SpotifyLibraryStore {
         scope.launch {
             lock.withLock {
                 _state.value = _state.value.copy(playlists = _state.value.playlists.filterNot { it.id == id && it.imported })
+                dev.lelonio.square.fusion.PlaylistCustomizations.forget(PLAYLIST_PREFIX + id)
                 synchronized(tracks) { tracks.remove(id) }
                 save()
             }

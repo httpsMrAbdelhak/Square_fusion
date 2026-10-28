@@ -23,6 +23,8 @@ object Fusion {
         val appContext = context.applicationContext
         app = appContext
         settings = FusionSettings(appContext)
+        runCatching { PlaylistCustomizations.init(appContext) }
+            .onFailure { FusionLog.w("playlist customizations unavailable: ${it.message}") }
         runCatching {
             dev.lelonio.square.fusion.spotify.SpotifyFreeAccount.init(appContext)
             dev.lelonio.square.fusion.spotify.SpotifyLibraryStore.init(appContext)
