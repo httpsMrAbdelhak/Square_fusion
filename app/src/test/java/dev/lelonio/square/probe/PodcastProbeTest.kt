@@ -10,9 +10,13 @@ class PodcastProbeTest {
 
     @Test
     fun probe() = runBlocking {
+        YouTube.locale = com.metrolist.innertube.models.YouTubeLocale(gl = "FR", hl = "fr")
+        val vd = YouTube.visitorData()
+        p("visitorData: ${vd.getOrNull()?.take(12)} err=${vd.exceptionOrNull()?.message?.take(200)}")
+        vd.getOrNull()?.let { YouTube.visitorData = it }
         for (q in listOf("Flip & Gossip", "Flip & Gossip Maghla", "Les Grosses Têtes")) {
             val r = YouTube.search(q, YouTube.SearchFilter.FILTER_PODCAST)
-            p("search '$q': ${r.exceptionOrNull()?.message ?: ""}")
+            p("search '$q': ${r.exceptionOrNull()?.message?.replace("\n"," ")?.take(400) ?: ""}")
             val items = r.getOrNull()?.items.orEmpty()
             items.take(4).forEach { p("  ${it::class.simpleName} id=${it.id} title=${it.title}") }
             items.filterIsInstance<PodcastItem>().take(2).forEach { show ->
