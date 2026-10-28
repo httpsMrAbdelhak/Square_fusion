@@ -19,6 +19,21 @@ n=0
 step() { echo "== $*"; }
 shot() { n=$((n + 1)); adb exec-out screencap -p > "$OUT/$(printf %02d $n)-$1.png" 2>/dev/null || true; }
 dump() { adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1; adb pull /sdcard/ui.xml "$OUT/$1.xml" > /dev/null 2>&1; }
+texts() {
+  # What dump $1 shows: its texts and descriptions with their bounds, as LOG lines.
+  python3 - "$OUT/$1.xml" <<'PY'
+import re, sys
+xml = open(sys.argv[1], encoding="utf-8").read()
+for m in re.finditer(r'<node [^>]*>', xml):
+    n = m.group(0)
+    t = re.search(r'text="([^"]*)"', n).group(1)
+    d = re.search(r'content-desc="([^"]*)"', n).group(1)
+    c = re.search(r'class="([^"]*)"', n).group(1).split(".")[-1]
+    b = re.search(r'bounds="([^"]*)"', n).group(1)
+    if t or d:
+        print("LOG", c, b, repr(t[:40]), repr(d[:40]), "click" if 'clickable="true"' in n else "")
+PY
+}
 alive() { adb shell pidof "$PKG" > /dev/null; }
 wait_log() {
   # $1: regex, $2: seconds. Prints the first matching line.
@@ -163,6 +178,7 @@ if grep -q 'text="Podcasts"' "$OUT/home.xml"; then
       sleep 3
     else
       echo "WARN no podcast card to open on the podcasts page"
+      texts podcasts | head -n 40
     fi
   fi
   tap_where home-chip2 'text == "Podcasts"' || true
@@ -286,7 +302,8 @@ if tap_where search-tab 'desc == "Search" or text == "Search"'; then
   adb shell input text "Flippe%sGo%sSleep"
   adb shell input keyevent KEYCODE_ENTER
   sleep 12
-  tap_where results 'text == "Podcasts"' || echo "WARN no Podcasts filter in the results"
+  dump results1
+  tap_where results 'text == "Podcasts"' || { echo "WARN no Podcasts filter in the results"; texts results1 | head -n 40; }
   sleep 4
   dump results2
   shot results
@@ -312,6 +329,7 @@ if tap_where search-tab 'desc == "Search" or text == "Search"'; then
     fi
   else
     echo "WARN no podcast result to open (YouTube search unavailable here?)"
+    texts results2 | head -n 40
   fi
 else
   echo "WARN no search button found"
