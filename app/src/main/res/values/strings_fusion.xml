@@ -13,7 +13,7 @@
     <string name="fusion_spotify_expired">Spotify session expired. Connect Spotify again in the settings.</string>
     <string name="fusion_import_playlist">Import a playlist</string>
     <string name="fusion_import">Import</string>
-    <string name="fusion_import_hint">Spotify or YouTube Music link</string>
+    <string name="fusion_import_hint">Spotify, YouTube Music or Apple Music link</string>
     <string name="fusion_import_bad_link">Not a playlist link.</string>
     <string name="fusion_app_icon">App icon</string>
     <string name="fusion_app_icon_summary">Square or BitChord icons</string>
@@ -28,4 +28,6 @@
     <string name="fusion_rate_applied">Rate now (read from the screen)</string>
     <string name="fusion_rate_not_confirmed">%1$d Hz was asked for but has not been confirmed by the system.</string>
     <string name="fusion_performance_note">Off: Square\'s own behaviour. On: the rate is asked of Android, which may decide otherwise (battery saver, heat). A higher rate can use more battery.</string>
+    <string name="fusion_download_quality">Download quality</string>
+    <string name="fusion_download_quality_note">Applies to songs downloaded from now on; songs already downloaded keep theirs. Rates are the ones YouTube states for each stream.</string>
 </resources>

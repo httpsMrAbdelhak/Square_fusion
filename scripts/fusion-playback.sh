@@ -160,7 +160,8 @@ shot imported
 imported=0
 case "$result" in
   *"imported playlist"*) echo "OK   ${result#*: }"; imported=1 ;;
-  *"import failed"*) echo "WARN Spotify refused the import here: ${result#*: }" ;;
+  *"import failed"*) echo "WARN Spotify refused the import here: ${result#*: }"
+    adb logcat -d -s 'SquareFusion:*' | tail -n 25 | sed 's/^/LOG /' ;;
   *) echo "FAIL the import neither finished nor failed in 90 s"; fail=1 ;;
 esac
 alive || { echo "FAIL app stopped during the import"; fail=1; }
@@ -172,10 +173,20 @@ if [ "$imported" = 1 ]; then
   dump playlist
   shot playlist
   adb logcat -c
-  tap_where playlist '(desc.lower() in ("play", "shuffle") or text.lower() in ("play", "shuffle")) and clickable' \
-    || tap_where playlist2 'desc.lower() in ("play", "shuffle") or text.lower() in ("play", "shuffle")' \
+  # Play, not Shuffle: the first song must be the playlist's first.
+  tap_where playlist '(desc.lower() == "play" or text.lower() == "play") and clickable' \
+    || tap_where playlist2 'desc.lower() == "play" or text.lower() == "play"' \
     || { echo "FAIL no Play button on the imported playlist"; fail=1; }
-  m=$(wait_log "match [A-Za-z0-9]+ " 60)
+  first=$(echo "$result" | sed -n 's/.*, first \([A-Za-z0-9]*\).*/\1/p')
+  # What the player loads first (the next songs are matched ahead in parallel,
+  # so the first match logged need not be the first song).
+  l=$(wait_log "player loads sp-" 60)
+  case "$l" in
+    *"player loads sp-$first"*) echo "OK   the player loaded the playlist's first song first ($first)" ;;
+    *"player loads"*) echo "FAIL the player loaded another song first than the playlist's first ($first): ${l#*: }"; fail=1 ;;
+    *) echo "WARN the player loaded no Spotify song in 60 s" ;;
+  esac
+  m=$(wait_log "match $first " 60 || wait_log "match [A-Za-z0-9]+ " 5)
   case "$m" in
     *"->"*) echo "OK   matched on YouTube Music: ${m#*: match }" ;;
     *"none close enough"*) echo "WARN first song not found on YouTube Music: ${m#*: match }" ;;

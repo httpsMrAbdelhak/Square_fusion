@@ -162,6 +162,24 @@ class PreferencesStore(context: Context) {
         prefs.edit().putString(KEY_YOUTUBE_QUALITY, value.name).apply()
     }
 
+    /**
+     * Square Fusion: the stream a downloaded song is kept from, apart from the
+     * one it streams from. The same tiers as [YouTubeQuality] without the
+     * automatic one: a download is made once, on whatever network is there.
+     * Maximum by default, which is what downloads always kept before.
+     */
+    enum class DownloadQuality { LOW, MEDIUM, HIGH, MAX }
+
+    private val _downloadQuality = MutableStateFlow(
+        DownloadQuality.entries.firstOrNull { it.name == prefs.getString(KEY_DOWNLOAD_QUALITY, null) } ?: DownloadQuality.MAX,
+    )
+    val downloadQuality: StateFlow<DownloadQuality> = _downloadQuality.asStateFlow()
+
+    fun setDownloadQuality(value: DownloadQuality) {
+        _downloadQuality.value = value
+        prefs.edit().putString(KEY_DOWNLOAD_QUALITY, value.name).apply()
+    }
+
     private val _systemFont = MutableStateFlow(prefs.getBoolean(KEY_SYSTEM_FONT, false))
 
     /**
@@ -418,6 +436,7 @@ class PreferencesStore(context: Context) {
         const val KEY_SYSTEM_FONT = "system_font"
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_YOUTUBE_QUALITY = "youtube_quality"
+        const val KEY_DOWNLOAD_QUALITY = "square_fusion_download_quality"
         const val KEY_LYRICS_STYLE = "lyrics_style"
         const val KEY_SPICY_LYRICS = "spicy_lyrics_key"
         const val KEY_PREFERRED_LYRICS = "preferred_lyrics_source"

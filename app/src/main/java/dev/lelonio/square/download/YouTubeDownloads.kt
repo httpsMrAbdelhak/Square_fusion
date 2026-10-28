@@ -113,20 +113,38 @@ object YouTubeDownloads {
         // wants one, as the player does. Without the second, a network
         // YouTube had stopped trusting ("confirm you're not a bot") could not
         // download anything, signed in or not (#81).
-        val source = try {
+        // Square Fusion: the stream the download quality setting picks (see
+        // AudioQuality.pick), the Premium ~256 kbps ones first for "Maximum"
+        // when the signed-in account is given them. The rate kept with the
+        // file is the one YouTube states for the stream chosen.
+        val tier = downloadTier(context)
+        val premium = if (tier == dev.lelonio.square.backend.youtube.AudioQuality.Tier.MAX) {
+            runCatching { dev.lelonio.square.backend.youtube.SignedInStreams.premiumAudio(context, streamId) }.getOrNull()
+        } else {
+            null
+        }
+        val source = if (premium != null) {
+            val (url, format) = premium
+            Source(url, if (format.mimeType.startsWith("audio/webm")) "webm" else "m4a", format.bitrate / 1000)
+        } else try {
             val info = StreamInfo.getInfo(ServiceList.YouTube, YouTubeStreams.WATCH_URL + streamId)
-            val stream = info.audioStreams
-                .filter { !it.content.isNullOrEmpty() }
-                .maxByOrNull { it.averageBitrate }
-                ?: error("no audio for $id")
+            val stream = dev.lelonio.square.backend.youtube.AudioQuality.pick(
+                info.audioStreams.filter { !it.content.isNullOrEmpty() },
+                tier,
+                kbps = { it.averageBitrate },
+                isAac = { it.format == org.schabi.newpipe.extractor.MediaFormat.M4A },
+            ) ?: error("no audio for $id")
             Source(stream.content, stream.format?.suffix ?: "m4a", stream.averageBitrate.takeIf { it > 0 } ?: 0)
         } catch (error: Exception) {
             if (!dev.lelonio.square.backend.youtube.SignedInStreams.needsAccount(error)) throw error
             val url = dev.lelonio.square.backend.youtube.SignedInStreams.url(
-                context, streamId, dev.lelonio.square.backend.youtube.SignedInStreams.Kind.AUDIO, lowRate = false,
+                context, streamId, dev.lelonio.square.backend.youtube.SignedInStreams.Kind.AUDIO,
+                lowRate = tier <= dev.lelonio.square.backend.youtube.AudioQuality.Tier.MEDIUM, tier = tier,
             )
             Source(url, if ("mime=audio%2Fwebm" in url) "webm" else "m4a", 0)
         }
+        android.util.Log.i("SquareYTQuality", "download $tier: $id ${source.extension} ${source.kbps} kbps" +
+            if (premium != null) " (signed in)" else "")
         val extension = source.extension
 
         val dir = directory(context)
@@ -188,6 +206,18 @@ object YouTubeDownloads {
             kbps = source.kbps,
             downloadedAt = System.currentTimeMillis(),
         )
+    }
+
+    /** The download quality setting, as a tier of AudioQuality. */
+    private fun downloadTier(context: Context): dev.lelonio.square.backend.youtube.AudioQuality.Tier {
+        val chosen = (context.applicationContext as? dev.lelonio.square.SquareApplication)
+            ?.preferences?.downloadQuality?.value
+        return when (chosen) {
+            dev.lelonio.square.data.PreferencesStore.DownloadQuality.LOW -> dev.lelonio.square.backend.youtube.AudioQuality.Tier.LOW
+            dev.lelonio.square.data.PreferencesStore.DownloadQuality.MEDIUM -> dev.lelonio.square.backend.youtube.AudioQuality.Tier.MEDIUM
+            dev.lelonio.square.data.PreferencesStore.DownloadQuality.HIGH -> dev.lelonio.square.backend.youtube.AudioQuality.Tier.HIGH
+            else -> dev.lelonio.square.backend.youtube.AudioQuality.Tier.MAX
+        }
     }
 
     /** Where a song's audio is fetched from, and what it is. */

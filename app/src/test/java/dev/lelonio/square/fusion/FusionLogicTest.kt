@@ -1,6 +1,8 @@
 package dev.lelonio.square.fusion
 
 import dev.lelonio.square.backend.youtube.AudioQuality
+import dev.lelonio.square.fusion.spotify.AppleMusicPlaylists
+import dev.lelonio.square.fusion.spotify.SpotifyEmbed
 import dev.lelonio.square.fusion.spotify.SpotifyLinks
 import dev.lelonio.square.fusion.spotify.SpotifyMatches
 import dev.lelonio.square.fusion.spotify.SpotifyPlaylistUnavailable
@@ -142,6 +144,71 @@ class FusionLogicTest {
         val missing = json.parseToJsonElement("""{"data":{"playlistV2":{"__typename":"NotFound"}}}""").jsonObject
         try {
             parsePlaylistInfo("abc", missing)
+            throw AssertionError("expected unavailable")
+        } catch (_: SpotifyPlaylistUnavailable) {
+        }
+    }
+
+    @Test
+    fun publicEmbedPageIsRead() {
+        val data = """{"props":{"pageProps":{"state":{"data":{"entity":{"type":"playlist","name":"Today’s Top Hits",
+            "subtitle":"Spotify","coverArt":{"sources":[{"url":"https://i.scdn.co/image/abc"}]},
+            "trackList":[
+              {"uri":"spotify:track:2sFepQNyl1WjpROruP8bJ0","title":"Housewife","subtitle":"Tate McRae","duration":208810},
+              {"uri":"spotify:episode:x","title":"Podcast","subtitle":"Show","duration":1},
+              {"uri":"spotify:track:0VjIjW4GlUZAMYd2vXMi3b","title":"Blinding Lights","subtitle":"The Weeknd","duration":200040}
+            ]}},
+            "settings":{"clientId":"cid","session":{"accessToken":"tok","accessTokenExpirationTimestampMs":1700000000000,"isAnonymous":true}}}}}}"""
+        val page = SpotifyEmbed.parse("<html><script id=\"__NEXT_DATA__\" type=\"application/json\">$data</script></html>")
+        assertEquals("Today’s Top Hits", page.name)
+        assertEquals("Spotify", page.owner)
+        assertEquals("https://i.scdn.co/image/abc", page.imageUrl)
+        assertEquals(listOf("Housewife", "Blinding Lights"), page.tracks.map { it.title })
+        assertEquals("2sFepQNyl1WjpROruP8bJ0", page.tracks[0].id)
+        assertEquals("Tate McRae", page.tracks[0].artist)
+        assertEquals(208810, page.tracks[0].durationMs)
+        assertEquals("tok", page.token)
+        assertEquals("cid", page.clientId)
+        try {
+            SpotifyEmbed.parse("<html>Page not found</html>")
+            throw AssertionError("expected unavailable")
+        } catch (_: SpotifyPlaylistUnavailable) {
+        }
+    }
+
+    @Test
+    fun appleMusicLinksAndPage() {
+        assertEquals(
+            "am.us.pl.f4d106fed2bd41149aaacabb233eb5eb",
+            AppleMusicPlaylists.playlistId("https://music.apple.com/us/playlist/todays-hits/pl.f4d106fed2bd41149aaacabb233eb5eb?l=fr"),
+        )
+        assertEquals("am.fr.pl.u-AbC123", AppleMusicPlaylists.playlistId("https://music.apple.com/fr/playlist/pl.u-AbC123"))
+        assertNull(AppleMusicPlaylists.playlistId("https://music.apple.com/us/album/housewife/6822497770"))
+        assertNull(AppleMusicPlaylists.playlistId("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"))
+
+        val data = """{"data":[{"data":{"sections":[
+          {"itemKind":"containerDetailHeaderLockup","items":[{"title":"Today’s Hits","trackCount":50,
+            "subtitleLinks":[{"title":"Apple Music Hits"}],"artwork":{"dictionary":{"url":"https://is1/x/{w}x{h}{c}.{f}"}}}]},
+          {"itemKind":"trackLockup","items":[
+            {"title":"Housewife","artistName":"Tate McRae","duration":208810,
+             "tertiaryLinks":[{"title":"Housewife - Single"}],
+             "contentDescriptor":{"kind":"song","identifiers":{"storeAdamID":"6822497774"}}},
+            {"title":"A video","contentDescriptor":{"kind":"musicVideo","identifiers":{"storeAdamID":"1"}}},
+            {"title":"Man I Need","subtitleLinks":[{"title":"Olivia Dean"}],"duration":185000,
+             "contentDescriptor":{"kind":"song","identifiers":{"storeAdamID":"42"}}}
+          ]}]}}]}"""
+        val page = AppleMusicPlaylists.parse("am.us.pl.x", "<script type=\"application/json\" id=\"serialized-server-data\">$data</script>")
+        assertEquals("Today’s Hits", page.playlist.name)
+        assertEquals("Apple Music Hits", page.playlist.owner)
+        assertEquals("https://is1/x/600x600bb.jpg", page.playlist.imageUrl)
+        assertEquals(50, page.listedCount)
+        assertEquals(listOf("Housewife", "Man I Need"), page.tracks.map { it.title })
+        assertEquals("am6822497774", page.tracks[0].id)
+        assertEquals("Housewife - Single", page.tracks[0].album)
+        assertEquals("Olivia Dean", page.tracks[1].artist)
+        assertEquals(185000, page.tracks[1].durationMs)
+        try {
+            AppleMusicPlaylists.parse("am.us.pl.x", "<html>Not found</html>")
             throw AssertionError("expected unavailable")
         } catch (_: SpotifyPlaylistUnavailable) {
         }

@@ -87,12 +87,12 @@ object SpotifyLibraryStore {
 
     /**
      * The songs of a playlist, from Spotify: with the account when one is
-     * connected, otherwise anonymously (public playlists only). Registered for
-     * matching on YouTube Music, and kept.
+     * connected, otherwise from the playlist's public page (see [read]).
+     * Registered for matching on YouTube Music, and kept.
      */
     suspend fun loadTracks(id: String, onPage: (List<SpotifyTrack>) -> Unit = {}): Result<List<SpotifyTrack>> =
         SpotifyFreeAccount.call(requireAccount = id == SpotifyFreeLibrary.LIKED_ID) {
-            val list = SpotifyFreeLibrary.tracks(id, onPage)
+            val list = if (id == SpotifyFreeLibrary.LIKED_ID) SpotifyFreeLibrary.tracks(id, onPage) else read(id, onPage).second
             remember(id, list)
             list
         }
@@ -103,11 +103,10 @@ object SpotifyLibraryStore {
      * ones need the connected account to have access.
      */
     suspend fun import(link: String): Result<Playlist> {
-        val id = SpotifyLinks.playlistId(link)
-            ?: return Result.failure(IllegalArgumentException("Not a Spotify playlist link"))
+        val id = SpotifyLinks.playlistId(link) ?: AppleMusicPlaylists.playlistId(link)
+            ?: return Result.failure(IllegalArgumentException("Not a Spotify or Apple Music playlist link"))
         return SpotifyFreeAccount.call(requireAccount = false) {
-            val info = SpotifyFreeLibrary.playlistInfo(id)
-            val songs = SpotifyFreeLibrary.tracks(id)
+            val (info, songs) = read(id)
             val playlist = Playlist(id, info.name, info.owner, info.imageUrl ?: songs.firstOrNull()?.imageUrl, imported = true)
             lock.withLock {
                 val others = _state.value.playlists.filterNot { it.id == id }
@@ -116,9 +115,44 @@ object SpotifyLibraryStore {
                 _state.value = _state.value.copy(playlists = others + (kept ?: playlist))
                 remember(id, songs)
             }
-            FusionLog.i("imported playlist $id \"${info.name}\": ${songs.size} songs")
+            FusionLog.i("imported playlist $id \"${info.name}\": ${songs.size} songs, first ${songs.firstOrNull()?.id}")
             playlist
         }
+    }
+
+    /**
+     * A playlist and its songs. Through the connected account first; without
+     * one, or when the account cannot read it, from the playlist's public
+     * embed page, which needs neither an account nor a WebView. That page
+     * lists at most [SpotifyEmbed.MAX_TRACKS] songs, so a playlist that
+     * reaches it is read again in full with the page's anonymous token.
+     */
+    private suspend fun read(id: String, onPage: (List<SpotifyTrack>) -> Unit = {}): Pair<SpotifyPlaylist, List<SpotifyTrack>> {
+        // Square Fusion: an Apple Music playlist, from its own public page.
+        if (AppleMusicPlaylists.isApple(id)) return AppleMusicPlaylists.playlist(id).let { it.playlist to it.tracks }
+        if (SpotifyFreeAccount.cookie().isNotBlank()) {
+            try {
+                return SpotifyFreeLibrary.playlistInfo(id) to SpotifyFreeLibrary.tracks(id, onPage)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                FusionLog.w("account could not read playlist $id (${e.message}); trying its public page")
+            }
+        }
+        val embed = SpotifyEmbed.playlist(id)
+        embed.token?.let { SpotifyFreeToken.seedAnonymous(it, embed.tokenExpiresAtMs, embed.clientId) }
+        var songs = embed.tracks
+        if (songs.size >= SpotifyEmbed.MAX_TRACKS && embed.token != null) {
+            try {
+                val full = SpotifyFreeLibrary.tracks(id)
+                if (full.size > songs.size) songs = full
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                FusionLog.w("playlist $id: only the first ${songs.size} songs could be read (${e.message})")
+            }
+        }
+        return SpotifyPlaylist(id, embed.name, embed.owner, embed.imageUrl) to songs
     }
 
     fun removeImported(id: String) {

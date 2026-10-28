@@ -592,7 +592,7 @@
     <string name="youtube_quality_auto">자동: Wi-Fi에서는 높음, 모바일 데이터에서는 낮음</string>
     <string name="youtube_quality_high">높음 (약 128kbps)</string>
     <string name="youtube_quality_low">낮음, 데이터 절약 (약 48kbps)</string>
-    <string name="youtube_quality_note">다음 곡부터 적용됩니다. 다운로드는 항상 최고 음질로 유지됩니다.</string>
+    <string name="youtube_quality_note">다음 곡부터 적용됩니다.</string>
     <plurals name="song_count">
         <item quantity="other">%1$d곡</item>
     </plurals>

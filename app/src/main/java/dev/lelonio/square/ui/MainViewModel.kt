@@ -2835,6 +2835,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     when {
                         it is IllegalArgumentException -> string(R.string.fusion_import_bad_link)
                         it is SpotifyPlaylistUnavailable -> string(R.string.fusion_spotify_unavailable)
+                        // Without an account there is no session to expire: Spotify refused.
+                        !SpotifyFreeAccount.connected.value &&
+                            (it as? SpotifyFreeAccount.FailureException)?.failure == SpotifyFreeAccount.Failure.SessionExpired ->
+                            string(R.string.fusion_spotify_unavailable)
                         else -> spotifyError(it)
                     },
                 )
@@ -3069,6 +3073,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun importPlaylistLink(link: String): Boolean {
         if (dev.lelonio.square.fusion.spotify.SpotifyLinks.playlistId(link) != null) {
             openLink(link)
+            return true
+        }
+        // An Apple Music playlist: imported into the Library like Spotify's.
+        dev.lelonio.square.fusion.spotify.AppleMusicPlaylists.playlistId(link)?.let { id ->
+            viewModelScope.launch {
+                publishPlaylist(PlaylistState(uri = SpotifyLibraryStore.PLAYLIST_PREFIX + id, loading = true))
+                importSpotifyPlaylist(link) { message ->
+                    if (message != null) publishPlaylist(_playlist.value.copy(loading = false, error = message))
+                }
+            }
             return true
         }
         val youtube = Regex("""(?:youtube\.com|youtu\.be)/.*[?&]list=([A-Za-z0-9_-]+)""").find(link.trim())
@@ -5103,6 +5117,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun canKeep(uri: String?): Boolean {
         val it = uri ?: return false
         val backend = container.activeBackend
+        // Square Fusion: a Spotify playlist is kept as its songs' YouTube Music matches.
+        if (it.startsWith(SpotifyLibraryStore.PLAYLIST_PREFIX)) return backend.id == BackendId.YOUTUBE_MUSIC
         return backend.owns(it) && when (backend.id) {
             // The official SDK streams and keeps nothing; see WebSdkRecovery.inUse.
             BackendId.SPOTIFY -> it.startsWith("spotify:") && !LocalLibrary.isSpotifyLocal(it) &&

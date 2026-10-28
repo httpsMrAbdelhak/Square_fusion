@@ -516,6 +516,12 @@ class DownloadQueue(
                 throw error
             // Taken off the list while it was coming.
             error is kotlinx.coroutines.CancellationException -> Outcome.FAILED
+            // Square Fusion: a Spotify song with no close enough match on
+            // YouTube Music, which another try now would not change.
+            error is dev.lelonio.square.fusion.spotify.SpotifyMatches.NotFound -> {
+                store.onFailed(trackUri, error.message.orEmpty())
+                Outcome.FAILED
+            }
             // The network, which is worth another go once it is back.
             error is java.io.IOException -> Outcome.NOT_NOW
             else -> {

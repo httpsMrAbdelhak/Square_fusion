@@ -106,12 +106,18 @@ object SpotifyMatches {
             "${stripDecorations(target.title)} ${primaryArtist(target.artist)}",
             stripDecorations(target.title),
         ).distinct().filter { it.isNotBlank() }
+        var answered = false
+        var failure: Throwable? = null
         for (query in queries) {
-            val songs = YouTube.search(query, YouTube.SearchFilter.FILTER_SONG).getOrNull()
+            val result = YouTube.search(query, YouTube.SearchFilter.FILTER_SONG)
+            result.exceptionOrNull()?.let { failure = it }
+            val songs = result.getOrNull()?.also { answered = true }
                 ?.items.orEmpty().filterIsInstance<SongItem>()
             best(songs.map { Candidate(it.title, it.artists.joinToString(", ") { a -> a.name }, it.album?.name, it.duration) }, target)
                 ?.let { return songs[it] }
         }
+        // No answer at all is the network, not a song missing from YouTube Music.
+        if (!answered) throw java.io.IOException("YouTube Music search failed: ${failure?.message}", failure)
         return null
     }
 

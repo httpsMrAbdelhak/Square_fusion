@@ -201,7 +201,9 @@ jobs:
           bt="$ANDROID_HOME/build-tools/36.0.0"
           digest() { "$bt/apksigner" verify --print-certs "$1" | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1; }
           new=$(digest square-fusion.apk)
-          if curl -fsSL -o "$RUNNER_TEMP/published.apk" "${{ github.server_url }}/${{ github.repository }}/releases/latest/download/square-fusion.apk"; then
+          if curl -fsSL -o "$RUNNER_TEMP/published.apk" "${{ github.server_url }}/${{ github.repository }}/releases/latest/download/square-fusion.apk" \
+            || { url=$(curl -fsSL "${{ github.api_url }}/repos/${{ github.repository }}/releases/latest" | python3 -c "import json,sys; print(next(a['browser_download_url'] for a in json.load(sys.stdin)['assets'] if a['name'].endswith('-universal.apk')))") \
+                 && curl -fsSL -o "$RUNNER_TEMP/published.apk" "$url"; }; then
             old=$(digest "$RUNNER_TEMP/published.apk")
           else
             old=""
@@ -290,7 +292,7 @@ jobs:
             [ -f "$log" ] || { echo "::warning title=$log::missing"; continue; }
             level=notice
             grep -qE "^FAIL|FAILURES|Process crashed|INSTRUMENTATION_FAILED" "$log" && level=error
-            grep -E "^(OK|FAIL|WARN) |^== |result|FAILURES|Tests run|OK \\(|^[a-zA-Z.]+Test[#:]|Process crashed|stack=|FATAL|Caused by|Exception|at dev\.lelonio\.square" "$log" | head -n 150 > "$RUNNER_TEMP/lines.txt" || true
+            grep -E "^(OK|FAIL|WARN|LOG) |^== |result|FAILURES|Tests run|OK \\(|^[a-zA-Z.]+Test[#:]|Process crashed|stack=|FATAL|Caused by|Exception|at dev\.lelonio\.square" "$log" | head -n 150 > "$RUNNER_TEMP/lines.txt" || true
             split -l 30 "$RUNNER_TEMP/lines.txt" "$RUNNER_TEMP/part-"
             for part in "$RUNNER_TEMP"/part-*; do
               [ -f "$part" ] || continue
@@ -342,6 +344,8 @@ jobs:
           Built from commit $SHA by run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           Signed with: $SIGNED_WITH
           Install square-fusion.apk (universal) or the file for your phone's ABI. It installs beside Square and does not replace it."
+          # The universal APK again under the name whose link never changes.
+          cp square-fusion-*-universal.apk square-fusion.apk
           (cd results && zip -qr ../test-results.zip .) || true
           extra=""
           [ -f test-results.zip ] && extra="test-results.zip"
