@@ -89,4 +89,49 @@ class FusionDeviceTest {
         assertFalse(RefreshRates.isSupported(display, 1000))
     }
 
+
+    @Test
+    fun playlistCoverIsKeptApartFromTheSource() {
+        PlaylistCustomizations.init(context)
+        val uri = "spotifree:playlist:testCover"
+        val source = dev.lelonio.square.data.CatalogPlaylist(uri = uri, name = "From Spotify", artworkUrl = "https://i.scdn.co/image/original")
+        val jpeg = java.io.ByteArrayOutputStream().use { out ->
+            android.graphics.Bitmap.createBitmap(8, 8, android.graphics.Bitmap.Config.ARGB_8888)
+                .compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+            out.toByteArray()
+        }
+        PlaylistCustomizations.setCover(uri, jpeg)
+        PlaylistCustomizations.setName(uri, "Mine")
+        val shown = PlaylistCustomizations.apply(source)
+        assertEquals("Mine", shown.name)
+        assertTrue(shown.artworkUrl!!.startsWith("file://"))
+        assertTrue(java.io.File(android.net.Uri.parse(shown.artworkUrl).path!!).isFile)
+        // The source's own data is not touched: a sync brings a new cover and it stays under the choice.
+        assertEquals("https://i.scdn.co/image/original", source.artworkUrl)
+        val synced = source.copy(artworkUrl = "https://i.scdn.co/image/new")
+        assertEquals(shown.artworkUrl, PlaylistCustomizations.apply(synced).artworkUrl)
+        // Back to the source's cover.
+        PlaylistCustomizations.clearCover(uri)
+        assertEquals("https://i.scdn.co/image/new", PlaylistCustomizations.apply(synced).artworkUrl)
+        PlaylistCustomizations.forget(uri)
+        assertEquals("From Spotify", PlaylistCustomizations.apply(source).name)
+    }
+
+    @Test
+    fun profilePhotoIsChosenAndCleared() = kotlinx.coroutines.runBlocking {
+        ProfilePhoto.init(context)
+        val picture = java.io.File(context.cacheDir, "picked.jpg")
+        picture.outputStream().use {
+            android.graphics.Bitmap.createBitmap(900, 600, android.graphics.Bitmap.Config.ARGB_8888)
+                .compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it)
+        }
+        assertTrue(ProfilePhoto.set(context, android.net.Uri.fromFile(picture)))
+        val kept = ProfilePhoto.custom.value
+        assertNotNull(kept)
+        val bitmap = android.graphics.BitmapFactory.decodeFile(android.net.Uri.parse(kept).path)
+        // Square, cut from the middle.
+        assertEquals(bitmap.width, bitmap.height)
+        ProfilePhoto.clear()
+        assertNull(ProfilePhoto.custom.value)
+    }
 }
