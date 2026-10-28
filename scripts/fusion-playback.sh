@@ -400,7 +400,9 @@ esac
 if [ -f "$OUT/playlist.xml" ]; then
   dashes=$(grep -o 'text="--:--"' "$OUT/playlist.xml" | wc -l)
   lengths=$(grep -oE 'text="[0-9]+:[0-9]{2}"' "$OUT/playlist.xml" | wc -l)
-  if [ "$dashes" = 0 ]; then echo "OK   imported playlist: $lengths song lengths on screen, no --:--"; else echo "FAIL imported playlist shows $dashes --:--"; fail=1; fi
+  if [ "$dashes" != 0 ]; then echo "FAIL imported playlist shows $dashes --:--"; fail=1
+  elif [ "$lengths" -gt 0 ]; then echo "OK   imported playlist: $lengths song lengths on screen, no --:--"
+  else echo "WARN no song length visible on the imported playlist's first screen"; fi
 fi
 
 # ── 6. Edit a playlist's name: kept, shown, and still there after a restart ──
@@ -432,7 +434,13 @@ PY
 }
 step "rename a playlist"
 to_library lib-a
-if long_press_where lib-b '"Top Hits" in text'; then
+# Below the sign-in card when no YouTube account is connected.
+found=0
+for swipe in 0 1 2 3; do
+  [ $swipe = 0 ] || { adb shell input swipe 160 520 160 180 400; sleep 2; }
+  if long_press_where lib-b '"Top Hits" in text and y1 > 100'; then found=1; break; fi
+done
+if [ $found = 1 ]; then
   sleep 2
   if tap_where edit-menu 'text == "Edit"'; then
     sleep 3
@@ -443,13 +451,21 @@ if long_press_where lib-b '"Top Hits" in text'; then
     tap_where edit-save 'text == "Save"'
     sleep 4
     dump renamed
+    for swipe in 1 2 3; do
+      grep -q 'text="FusionTest"' "$OUT/renamed.xml" && break
+      adb shell input swipe 160 520 160 180 400; sleep 2; dump renamed
+    done
     shot renamed
     if grep -q 'could not be saved' "$OUT/renamed.xml"; then echo "FAIL the rename showed an error"; fail=1; fi
     if grep -q 'text="FusionTest"' "$OUT/renamed.xml"; then echo "OK   renamed in the Library"; else echo "FAIL the new name is not shown"; fail=1; texts renamed | head -n 15; fi
     adb shell am force-stop "$PKG"
     sleep 2
     to_library lib-c
-    dump restarted
+    for swipe in 0 1 2 3; do
+      [ $swipe = 0 ] || { adb shell input swipe 160 520 160 180 400; sleep 2; }
+      dump restarted
+      grep -q 'text="FusionTest"' "$OUT/restarted.xml" && break
+    done
     if grep -q 'text="FusionTest"' "$OUT/restarted.xml"; then echo "OK   the name is still there after a restart"; else echo "FAIL the name was lost on restart"; fail=1; fi
   else
     echo "FAIL no Edit in the playlist's menu"; fail=1; texts edit-menu | head -n 15
