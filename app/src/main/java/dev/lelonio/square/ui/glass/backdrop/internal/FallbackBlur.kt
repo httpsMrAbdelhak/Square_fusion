@@ -88,11 +88,11 @@ internal class FallbackBlur {
         val lastSize = sourceSize
         recordLayer(node, target, size = size) {
             translate(-margin.toFloat(), -margin.toFloat()) {
-                scale(
-                    rawSize.width / lastSize.width.toFloat(),
-                    rawSize.height / lastSize.height.toFloat(),
-                    pivot = Offset.Zero,
-                ) { drawLayer(last) }
+                if (levels == 0) {
+                    drawLayer(last)
+                } else {
+                    meanOf(rawSize, last, lastSize)
+                }
             }
         }
     }
@@ -105,20 +105,22 @@ internal class FallbackBlur {
      * The mean is a running one: each draw over the ones before at 1/n.
      */
     private fun DrawScope.draw(node: DelegatableNode, into: GraphicsLayer, intoSize: IntSize, from: GraphicsLayer, fromSize: IntSize) {
-        recordLayer(node, into, size = intoSize) {
-            val bounds = androidx.compose.ui.geometry.Rect(0f, 0f, intoSize.width.toFloat(), intoSize.height.toFloat())
-            TAPS.forEachIndexed { index, (dx, dy) ->
-                val paint = androidx.compose.ui.graphics.Paint().apply { alpha = 1f / (index + 1) }
-                drawContext.canvas.saveLayer(bounds, paint)
-                scale(
-                    intoSize.width / fromSize.width.toFloat(),
-                    intoSize.height / fromSize.height.toFloat(),
-                    pivot = Offset.Zero,
-                ) {
-                    translate(dx, dy) { drawLayer(from) }
-                }
-                drawContext.canvas.restore()
+        recordLayer(node, into, size = intoSize) { meanOf(intoSize, from, fromSize) }
+    }
+
+    private fun DrawScope.meanOf(intoSize: IntSize, from: GraphicsLayer, fromSize: IntSize) {
+        val bounds = androidx.compose.ui.geometry.Rect(0f, 0f, intoSize.width.toFloat(), intoSize.height.toFloat())
+        TAPS.forEachIndexed { index, (dx, dy) ->
+            val paint = androidx.compose.ui.graphics.Paint().apply { alpha = 1f / (index + 1) }
+            drawContext.canvas.saveLayer(bounds, paint)
+            scale(
+                intoSize.width / fromSize.width.toFloat(),
+                intoSize.height / fromSize.height.toFloat(),
+                pivot = Offset.Zero,
+            ) {
+                translate(dx, dy) { drawLayer(from) }
             }
+            drawContext.canvas.restore()
         }
     }
 
