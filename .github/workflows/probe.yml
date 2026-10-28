@@ -1,4 +1,4 @@
-name: Spotify probe
+name: Apple probe
 on:
   push:
     branches: [probe]
@@ -11,9 +11,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           UA="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36"
-          curl -s -A "$UA" "https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M" -o e.html -w "embed %{http_code}\n" > out.txt
-          python3 probe/embed.py e.html >> out.txt 2>&1 || true
-          curl -s -A "$UA" "https://open.spotify.com/embed/playlist/3cEYpjA9oz9GiPac4AsH4n" -o e2.html -w "embed2 %{http_code}\n" >> out.txt
-          python3 probe/embed.py e2.html | grep -E "len|next_data" >> out.txt 2>&1 || true
-          head -c 60000 out.txt | split -l 40 - part-
+          curl -sL -A "$UA" "https://music.apple.com/us/playlist/todays-hits/pl.f4d106fed2bd41149aaacabb233eb5eb" -o a.html -w "apple %{http_code}\n" > out.txt
+          python3 probe/apple.py a.html >> out.txt 2>&1 || true
+          head -c 60000 out.txt | split -l 45 - part-
           for p in part-*; do msg=$(sed 's/%/%25/g' "$p" | awk '{printf "%s%%0A", $0}'); echo "::notice title=$p::$msg"; done
