@@ -257,6 +257,66 @@ if [ "$imported" = 1 ]; then
   adb logcat -d | grep -E "SquareYTQuality" | tail -n 3 | sed 's/^/     /'
 fi
 
+# ── 3b. Search: a podcast, its episodes, and the filter kept on the way back ─
+step "search a podcast"
+adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
+sleep 3
+for i in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 1; done
+adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
+sleep 4
+selected_chip() {
+  # Whether the chip labelled $2 (or a node around it) is marked selected in dump $1.
+  python3 - "$OUT/$1.xml" "$2" <<'PY'
+import sys, xml.etree.ElementTree as ET
+root = ET.parse(sys.argv[1]).getroot()
+parent = {c: p for p in root.iter() for c in p}
+for n in root.iter("node"):
+    if n.get("text") == sys.argv[2]:
+        e = n
+        while e is not None:
+            if e.get("selected") == "true" or e.get("checked") == "true":
+                print("yes"); sys.exit(0)
+            e = parent.get(e)
+print("no")
+PY
+}
+if tap_where search-tab 'desc == "Search" or text == "Search"'; then
+  sleep 3
+  tap_where search-field '"EditText" in cls' || true
+  adb shell input text "Flippe%sGo%sSleep"
+  adb shell input keyevent KEYCODE_ENTER
+  sleep 12
+  tap_where results 'text == "Podcasts"' || echo "WARN no Podcasts filter in the results"
+  sleep 4
+  dump results2
+  shot results
+  if tap_where results3 '"Flippe" in text and y1 > 250'; then
+    sleep 15
+    dump podcast
+    shot podcast
+    if grep -q 'text="No songs"' "$OUT/podcast.xml"; then
+      echo "FAIL the podcast opened from search shows no episodes"; fail=1
+    else
+      echo "OK   podcast opened from search with $(grep -o 'text="[^"]*FLIPPE[^"]*"' "$OUT/podcast.xml" | wc -l) episode rows on screen"
+    fi
+    adb shell input keyevent KEYCODE_BACK
+    sleep 4
+    dump back
+    shot back
+    if [ "$(selected_chip back Podcasts)" = yes ]; then
+      echo "OK   the Podcasts filter is still selected after coming back"
+    elif [ "$(selected_chip results2 Podcasts)" = no ]; then
+      echo "WARN cannot tell the selected chip from the screen dump"
+    else
+      echo "FAIL the Podcasts filter was lost on the way back"; fail=1
+    fi
+  else
+    echo "WARN no podcast result to open (YouTube search unavailable here?)"
+  fi
+else
+  echo "WARN no search button found"
+fi
+
 # ── 4. Apple Music import ───────────────────────────────────────────────────
 APPLE="${APPLE_TEST_PLAYLIST:-https://music.apple.com/us/playlist/todays-hits/pl.f4d106fed2bd41149aaacabb233eb5eb}"
 step "import $APPLE"
