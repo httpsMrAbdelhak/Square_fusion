@@ -121,6 +121,58 @@ gardent leur qualité.
   Vérifié sur « Flippe & Go Sleep » et « SIP & GOSSIP » (Maghla) et « Les
   Grosses Têtes » : 0 épisode avant, 22, 35 et 100 après.
 
+### Nom et pochette des playlists — Bibliothèque › appui long › Modifier
+- Correction : Square proposait « Modifier » sur toutes les playlists YouTube
+  de la bibliothèque et envoyait le nouveau nom à YouTube, qui refuse pour une
+  playlist simplement enregistrée (pas créée par le compte) ou pour « J'aime » ;
+  l'erreur s'affichait comme un problème de connexion et le nom était perdu.
+- Maintenant le nom n'est envoyé à YouTube que pour les playlists du compte,
+  comme YouTube l'indique. Ailleurs, ou si YouTube ne répond pas, le nom est
+  gardé dans Square et affiché partout, sans erreur, après redémarrage aussi.
+- Pochette personnelle pour chaque playlist (sélecteur de photos d'Android),
+  et « Pochette d'origine » pour revenir à celle de la source. Elle reste sur
+  le téléphone : la pochette Spotify ou YouTube n'est jamais modifiée.
+- Les playlists Spotify et Apple Music importées se modifient aussi.
+- Nom et pochette personnels sont posés par-dessus les données de la source :
+  la synchronisation continue de mettre à jour titres et pochette d'origine
+  en dessous, sans jamais écraser le choix fait dans Square.
+
+### Qualité affichée pendant la lecture
+Sous la barre de progression, entre les deux temps : le codec réellement
+entré dans le décodeur pour le titre en cours (AAC, Opus…) et le débit, qui
+est :
+- pour un titre téléchargé, celui du fichier lu (taille ÷ durée), mesuré ;
+- en streaming, celui que YouTube indique pour le flux réellement choisi pour
+  ce titre, affiché seulement si ce flux est dans le codec décodé.
+Sans débit connu, seul le codec est affiché ; rien avant que le décodeur ait
+reçu le flux.
+
+### Accueil et profil
+- En haut à gauche, à côté du logo : « Bonjour », « Bon après-midi » ou
+  « Bonsoir » selon l'heure du téléphone (5 h–12 h, 12 h–18 h, ensuite),
+  suivi du nom du compte YouTube connecté ; sans compte, la salutation seule.
+  Mise à jour chaque minute.
+- Photo de profil : celle du compte YouTube connecté, ou une photo choisie
+  dans Paramètres › Compte › Photo de profil (« Utiliser la photo du compte »
+  pour revenir). Elle reste sur le téléphone ; le profil YouTube n'est pas
+  modifié.
+
+### Durées des titres Spotify
+Les titres des playlists Spotify affichaient des tirets : Spotify renvoie
+désormais la durée sous `trackDuration`, que Square ne lisait pas. Elle est
+lue, une durée connue n'est jamais remplacée par une valeur vide, et à défaut
+la durée du titre YouTube Music correspondant (même enregistrement vérifié)
+est utilisée. Les playlists déjà importées sont corrigées à leur prochaine
+ouverture.
+
+### Paramètres et À propos
+- La case « Soutenir le développement » (Ko-fi du développeur d'origine) est
+  retirée ; les six cases restantes sont sur trois rangées.
+- À propos : le lien GitHub et le Ko-fi du développeur d'origine sont
+  remplacés par le dépôt de Square Fusion ; « Signaler un problème » ouvre
+  ses issues. La communauté Telegram et les discussions du projet d'origine ne
+  sont plus listées.
+
 ### Recherche
 Le filtre choisi (Titres, Vidéos, Artistes, Albums, Podcasts…) reste
 sélectionné au retour d'un résultat, avec la liste et sa position. Une
