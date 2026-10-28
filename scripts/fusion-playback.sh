@@ -444,7 +444,7 @@ open_imported() {
     && tap_where "$1-import" 'text == "Import"' && sleep 15
 }
 open_imported page-a
-if tap_where page-more 'desc == "More"'; then
+if tap_where page-more 'desc == "More" and y1 < 120'; then
   sleep 2
   if tap_where edit-menu 'text == "Edit"'; then
     sleep 3
