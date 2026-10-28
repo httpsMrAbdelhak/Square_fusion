@@ -443,6 +443,51 @@ open_imported() {
     && adb shell input text "'$LINK'" && sleep 1 \
     && tap_where "$1-import" 'text == "Import"' && sleep 15
 }
+# Menus: how long each takes to open, a few times over; on a stall, what the
+# main thread is doing.
+trace_main() {
+  adb root > /dev/null 2>&1; sleep 3
+  local pid
+  pid=$(adb shell pidof "$PKG" | tr -d '\r')
+  [ -n "$pid" ] || { echo "LOG no process to trace"; return; }
+  adb shell kill -3 "$pid"; sleep 4
+  local file
+  file=$(adb shell 'ls -t /data/anr/ 2>/dev/null | head -n 1' | tr -d '\r')
+  adb shell cat "/data/anr/$file" 2>/dev/null > "$OUT/trace-$1.txt"
+  awk '/^"main"/{on=1} on{print "LOG " $0; n++} n>=45{exit}' "$OUT/trace-$1.txt"
+}
+menu_time() {
+  # $1 label, $2 tap rule, $3 what the open menu shows (regex)
+  tap_where "$1" "$2" || { echo "WARN $1: nothing to tap"; return 1; }
+  local start ms i
+  start=$(date +%s%N)
+  for i in $(seq 1 40); do
+    if adb shell uiautomator dump /sdcard/m.xml > /dev/null 2>&1 && adb shell cat /sdcard/m.xml | grep -qE "$3"; then
+      ms=$(( ($(date +%s%N) - start) / 1000000 ))
+      echo "OK   $1 opened in ${ms} ms"
+      return 0
+    fi
+    sleep 0.5
+  done
+  echo "FAIL $1 did not open within 20 s"; fail=1
+  trace_main "$1"
+  return 1
+}
+step "menus on Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
+open_imported page-diag
+adb shell dumpsys gfxinfo "$PKG" reset > /dev/null 2>&1
+for n in 1 2 3; do
+  menu_time "playlist-menu-$n" 'desc == "More" and y1 < 120' 'text="(Edit|Copy link)"' || break
+  adb shell input keyevent KEYCODE_BACK; sleep 2
+done
+for n in 1 2; do
+  menu_time "song-menu-$n" 'desc == "More" and y1 > 150' 'text="(Go to artist|Copy link|Add to queue)"' || break
+  adb shell input keyevent KEYCODE_BACK; sleep 2
+done
+adb shell dumpsys gfxinfo "$PKG" | grep -E "Total frames|Janky frames|90th|99th|Number Frame deadline missed" | sed 's/^/LOG /'
+adb logcat -d | grep -E "Choreographer.*Skipped|ANR in|Input dispatching timed out" | tail -n 5 | sed 's/^/LOG /'
+alive || { echo "FAIL app stopped during the menus"; fail=1; }
+
 open_imported page-a
 if tap_where page-more 'desc == "More" and y1 < 120'; then
   sleep 4
