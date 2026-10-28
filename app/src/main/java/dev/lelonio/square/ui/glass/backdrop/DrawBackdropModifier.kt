@@ -635,7 +635,15 @@ private class DrawBackdropNode(
             }
             wasHolding = holding
 
-            if (needsRecord) {
+            // Square Fusion: on Android 11 the blur costs a few passes, so while
+            // things move it is redrawn at most every FallbackIntervalMillis;
+            // in between the last one stays, and the next frame tries again.
+            val throttled = needsRecord && hasRecording && recordSize == recordedBackdropSize &&
+                fallbackActive() &&
+                (now - lastRecordedAt) / 1_000_000f < FallbackIntervalMillis
+            if (throttled) {
+                this@DrawBackdropNode.invalidateDraw()
+            } else if (needsRecord) {
                 recordBackdrop(layer, recordSize)
                 recordedBackdropVersion = version
                 recordedBackdropOffset = offset
@@ -686,7 +694,7 @@ private class DrawBackdropNode(
                 paint(layer)
             }
 
-            needsRecord
+            needsRecord && !throttled
         } else {
             false
         }
@@ -778,6 +786,9 @@ private class DrawBackdropNode(
         surfaceDirty = true
         observeEffects()
     }
+
+    /** Square Fusion: the shortest time between two Android 11 blurs of a moving backdrop. */
+    private val FallbackIntervalMillis = 50f
 
     /** Square Fusion: the blur and colour of the effects, drawn without a RenderEffect (Android 11). */
     private var fallbackBlur: FallbackBlur? = null

@@ -55,16 +55,25 @@ internal class FallbackBlur {
         val levels = levelsFor(radius, size)
         val margin = if (levels == 0) 0 else (1 shl levels) * 2
         val rawSize = IntSize(size.width + 2 * margin, size.height + 2 * margin)
+        // The first halving is the recording itself: the backdrop drawn at half
+        // its size, the largest of the passes saved.
+        val first = if (levels == 0) 1 else 2
+        val recordedSize = IntSize((rawSize.width / first).coerceAtLeast(1), (rawSize.height / first).coerceAtLeast(1))
         val raw = layer(0, node)
-        recordLayer(node, raw, size = rawSize) {
-            translate(margin.toFloat(), margin.toFloat()) { block() }
+        recordLayer(node, raw, size = recordedSize) {
+            scale(1f / first, pivot = Offset.Zero) {
+                translate(margin.toFloat(), margin.toFloat()) { block() }
+            }
         }
 
         // Down: each level half the one before.
-        val sizes = ArrayList<IntSize>(levels + 1).apply { add(rawSize) }
+        val sizes = ArrayList<IntSize>(levels + 1).apply {
+            add(rawSize)
+            if (levels > 0) add(recordedSize)
+        }
         var source = raw
-        var sourceSize = rawSize
-        for (level in 1..levels) {
+        var sourceSize = recordedSize
+        for (level in 2..levels) {
             val nextSize = IntSize((sourceSize.width / 2).coerceAtLeast(1), (sourceSize.height / 2).coerceAtLeast(1))
             val next = layer(level, node)
             source.colorFilter = null
@@ -98,11 +107,12 @@ internal class FallbackBlur {
     }
 
     /**
-     * [from] drawn into [into] at its size, as the mean of four draws half a
+     * [from] drawn into [into] at its size, as the mean of draws half a
      * source pixel apart: a 2x2 box when halving, a tent when doubling,
      * whatever filtering the GPU applies to a scaled layer (the emulator's
      * samples the nearest pixel, which alone would only skip every other one).
      * The mean is a running one: each draw over the ones before at 1/n.
+     * Two taps, on the diagonal: each takes a different pixel on both axes.
      */
     private fun DrawScope.draw(node: DelegatableNode, into: GraphicsLayer, intoSize: IntSize, from: GraphicsLayer, fromSize: IntSize) {
         recordLayer(node, into, size = intoSize) { meanOf(intoSize, from, fromSize) }
@@ -147,7 +157,7 @@ internal class FallbackBlur {
 
         private const val MAX_LEVELS = 6
 
-        /** Half a source pixel each way, in the source's own pixels. */
-        private val TAPS = listOf(-0.5f to -0.5f, 0.5f to -0.5f, -0.5f to 0.5f, 0.5f to 0.5f)
+        /** Half a source pixel apart on both axes, in the source's own pixels: two of each 2x2 block. */
+        private val TAPS = listOf(-0.5f to -0.5f, 0.5f to 0.5f)
     }
 }
