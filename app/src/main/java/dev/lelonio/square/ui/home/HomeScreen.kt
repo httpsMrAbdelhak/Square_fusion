@@ -696,6 +696,9 @@ private fun Header(
                     iconSize = 44.dp,
                     nameHeight = 22.dp,
                     plate = backdrop,
+                    // Square Fusion: a greeting for the time of day, by name, in
+                    // place of the app's name.
+                    name = { Greeting(name) },
                     modifier = Modifier
                         .padding(top = 4.dp)
                         .graphicsLayer {
@@ -1518,6 +1521,43 @@ fun SourceRowsPage(
 }
 
 /**
+ * Square Fusion: "Good morning, <name>" and the like, from the phone's own
+ * clock, read again every minute so it turns over while the app stays open.
+ * The account's name as YouTube gives it; without one, the greeting alone.
+ */
+@Composable
+private fun Greeting(name: String) {
+    var hour by remember { mutableStateOf(java.time.LocalTime.now().hour) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val now = java.time.LocalTime.now()
+            hour = now.hour
+            kotlinx.coroutines.delay((60 - now.second) * 1000L)
+        }
+    }
+    val who = name.trim().takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+    val text = when (greetingOf(hour)) {
+        0 -> if (who != null) stringResource(R.string.fusion_greeting_morning_name, who) else stringResource(R.string.fusion_greeting_morning)
+        1 -> if (who != null) stringResource(R.string.fusion_greeting_afternoon_name, who) else stringResource(R.string.fusion_greeting_afternoon)
+        else -> if (who != null) stringResource(R.string.fusion_greeting_evening_name, who) else stringResource(R.string.fusion_greeting_evening)
+    }
+    Text(
+        text,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/** Square Fusion: 0 morning (5 to 12), 1 afternoon (12 to 18), 2 evening and night. */
+internal fun greetingOf(hour: Int): Int = when (hour) {
+    in 5..11 -> 0
+    in 12..17 -> 1
+    else -> 2
+}
+
+/**
  * The YouTube page's header.
  *
  * Far plainer than [Header]: that one carries the feed's filter chips and a
@@ -1537,7 +1577,8 @@ private fun YouTubeHeader(
     Header(
         modifier = modifier,
         name = accountName,
-        avatarUrl = null,
+        // Square Fusion: the picture chosen on the phone, or the YouTube account's.
+        avatarUrl = dev.lelonio.square.ui.settings.rememberProfilePhoto(),
         collapse = collapse,
         highlighted = Feed.entries.first(),
         backdrop = backdrop,

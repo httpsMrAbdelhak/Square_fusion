@@ -308,7 +308,10 @@ internal fun parseTrackPage(root: JsonObject): Triple<List<SpotifyTrack>, Int, I
             title = title,
             artist = artist,
             album = album?.str("name"),
-            durationMs = data.obj("duration")?.int("totalMilliseconds") ?: 0,
+            // Square Fusion: "trackDuration" in today's answers ("duration" in
+            // older ones); reading only the latter left every song at 0, shown
+            // as dashes.
+            durationMs = (data.obj("trackDuration") ?: data.obj("duration"))?.int("totalMilliseconds") ?: 0,
             imageUrl = album?.obj("coverArt")?.arr("sources")?.lastUrl(),
         )
     }

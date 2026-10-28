@@ -100,6 +100,65 @@ internal fun SpotifyFreeSection(onSignIn: () -> Unit) {
     }
 }
 
+/**
+ * The picture at the top of the home page and on the account card: one chosen
+ * on the phone, or else the YouTube account's own; null for the generated
+ * cover every missing picture gets.
+ */
+@Composable
+internal fun rememberProfilePhoto(): String? {
+    val context = LocalContext.current
+    val account = remember(context) { (context.applicationContext as dev.lelonio.square.SquareApplication).youtubeAccount }
+    val custom by dev.lelonio.square.fusion.ProfilePhoto.custom.collectAsStateWithLifecycle()
+    val youtube by account.accountPhoto.collectAsStateWithLifecycle()
+    return custom ?: youtube
+}
+
+/** Account › Profile picture: choose one on the phone, or go back to the account's own. */
+@Composable
+internal fun ProfilePhotoSection(name: String?) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val photo = rememberProfilePhoto()
+    val custom by dev.lelonio.square.fusion.ProfilePhoto.custom.collectAsStateWithLifecycle()
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked ->
+        if (picked != null) scope.launch { dev.lelonio.square.fusion.ProfilePhoto.set(context, picked) }
+    }
+    val choose = {
+        pick.launch(
+            androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+        )
+    }
+    Section(stringResource(R.string.fusion_profile_photo)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = choose)
+                .padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            dev.lelonio.square.ui.components.ProfilePicture(
+                url = photo,
+                name = name,
+                size = 56.dp,
+                modifier = Modifier.size(56.dp),
+                decodeSize = 56.dp,
+            )
+            Text(
+                stringResource(R.string.fusion_profile_photo_choose),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(start = 14.dp),
+            )
+        }
+        if (custom != null) {
+            RowDivider()
+            ActionRow(stringResource(R.string.fusion_profile_photo_reset), destructive = false) {
+                dev.lelonio.square.fusion.ProfilePhoto.clear()
+            }
+        }
+    }
+}
+
 @Composable
 internal fun SpotifyFreeLoginPage(header: @Composable () -> Unit, contentPadding: PaddingValues, onDone: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding())) {

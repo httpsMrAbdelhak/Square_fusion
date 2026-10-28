@@ -1796,7 +1796,7 @@ fun PlayerScreen(
                                 // out grey over a brown page.
                                 backdrop = glassBackdrop,
                             )
-                            TimeRow(shownPosition, state.durationMs)
+                            TimeRow(shownPosition, state.durationMs, state.mediaId)
 
                             Spacer(Modifier.height(if (sideways) 6.dp else 14.dp))
                         }
@@ -2500,19 +2500,76 @@ private fun Modifier.plainClickable(onClick: () -> Unit): Modifier {
 
 /** Isolated so the ticking position recomposes only these two labels. */
 @Composable
-internal fun TimeRow(positionMs: State<Long>, durationMs: Long) {
+internal fun TimeRow(positionMs: State<Long>, durationMs: Long, mediaId: String? = null) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(
             formatDuration(positionMs.value),
             style = MaterialTheme.typography.bodySmall,
             color = GlassInkDim,
         )
+        // Square Fusion: the sound actually playing, between the two times.
+        if (mediaId != null) {
+            QualityLine(mediaId, durationMs, Modifier.weight(1f).padding(horizontal = 8.dp))
+        }
         Text(
             formatDuration(durationMs),
             style = MaterialTheme.typography.bodySmall,
             color = GlassInkDim,
         )
     }
+}
+
+/**
+ * Square Fusion: the codec and rate of what is playing, as small as the times
+ * beside it.
+ *
+ * Nothing here is the setting: the codec is the format that went into the
+ * decoder for this entry; the rate is the file's own (its size over its
+ * length) for a downloaded song, or the one YouTube states for the very
+ * stream chosen for it, and only when that stream is in the codec the decoder
+ * got. No rate when neither is known, and nothing at all before the decoder
+ * has said what it is playing.
+ */
+@Composable
+private fun QualityLine(mediaId: String, durationMs: Long, modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val decodedAll by dev.lelonio.square.backend.youtube.AudioQuality.decoded.collectAsStateWithLifecycle()
+    val statedAll by dev.lelonio.square.backend.youtube.AudioQuality.stated.collectAsStateWithLifecycle()
+    val videoId = dev.lelonio.square.backend.youtube.YouTubeBackend.videoIdOfUri(mediaId)
+    // The downloaded file the player reads in place of the stream, if there is one.
+    val file = remember(mediaId, decodedAll[mediaId]) {
+        val base = mediaId.substringBefore('#')
+        // As YouTubePlayerFactory decides: the file, unless the video is showing over a network.
+        runCatching { dev.lelonio.square.download.YouTubeDownloads.fileFor(context, base) }.getOrNull()
+            ?.takeIf {
+                !dev.lelonio.square.backend.youtube.YouTubeVideoMode.wantsVideo(base) ||
+                    dev.lelonio.square.playback.OfflineMode.active.value
+            }
+    }
+    // A Spotify song is renamed to its YouTube match once found; the decoder
+    // may have started under the first name.
+    val decoded = decodedAll[mediaId] ?: decodedAll.entries.firstOrNull { (key, _) ->
+        val id = dev.lelonio.square.backend.youtube.YouTubeBackend.videoIdOfUri(key)
+        dev.lelonio.square.fusion.spotify.SpotifyMatches.isPlaceholder(id) &&
+            dev.lelonio.square.fusion.spotify.SpotifyMatches.known(id.removePrefix(dev.lelonio.square.fusion.spotify.SpotifyMatches.ID_PREFIX)) == videoId
+    }?.value ?: return
+    val codec = dev.lelonio.square.backend.youtube.AudioQuality.codecName(decoded.mime) ?: return
+    val kbps = if (file != null) {
+        // The file's own average rate, measured.
+        if (durationMs > 0) ((file.length() * 8) / durationMs).toInt() else null
+    } else {
+        statedAll[videoId]
+            ?.takeIf { dev.lelonio.square.backend.youtube.AudioQuality.codecOfStated(it) == codec }
+            ?.kbps?.takeIf { it > 0 }
+    }
+    Text(
+        if (kbps != null) stringResource(R.string.fusion_quality_line, codec, kbps) else codec,
+        style = MaterialTheme.typography.labelSmall,
+        color = GlassInkDim,
+        maxLines = 1,
+        textAlign = TextAlign.Center,
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -3146,7 +3203,7 @@ private fun SongCard(
                 accentColor = GlassInk,
                 trackColor = GlassInk.copy(alpha = 0.28f),
             )
-            TimeRow(positionMs, state.durationMs)
+            TimeRow(positionMs, state.durationMs, state.mediaId)
         }
         Text(
             state.title,

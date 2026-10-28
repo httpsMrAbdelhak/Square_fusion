@@ -8,6 +8,7 @@ import dev.lelonio.square.fusion.spotify.SpotifyMatches
 import dev.lelonio.square.fusion.spotify.SpotifyPlaylistUnavailable
 import dev.lelonio.square.fusion.spotify.parseArtistPage
 import dev.lelonio.square.fusion.spotify.parsePlaylistInfo
+import dev.lelonio.square.fusion.spotify.parseTrackPage
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
@@ -212,6 +213,23 @@ class FusionLogicTest {
             throw AssertionError("expected unavailable")
         } catch (_: SpotifyPlaylistUnavailable) {
         }
+    }
+
+    @Test
+    fun playlistSongsKeepTheirLength() {
+        val root = json.parseToJsonElement(
+            """{"data":{"playlistV2":{"content":{"totalCount":2,"items":[
+              {"itemV2":{"data":{"uri":"spotify:track:a","name":"One More Night","trackDuration":{"totalMilliseconds":219546},
+                "artists":{"items":[{"profile":{"name":"Maroon 5"}}]},"albumOfTrack":{"name":"Overexposed"}}}},
+              {"itemV2":{"data":{"uri":"spotify:track:b","name":"Older","duration":{"totalMilliseconds":200000},
+                "artists":{"items":[{"profile":{"name":"X"}}]}}}}
+            ]}}}}""",
+        ).jsonObject
+        val (songs, total, _) = parseTrackPage(root)
+        assertEquals(2, total)
+        assertEquals(219546, songs[0].durationMs)
+        assertEquals("Maroon 5", songs[0].artist)
+        assertEquals(200000, songs[1].durationMs)
     }
 
     @Test

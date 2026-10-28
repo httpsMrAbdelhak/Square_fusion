@@ -340,7 +340,7 @@ fun SettingsScreen(
                     ready != null -> stringResource(R.string.playlist_count, ready.playlists.size)
                     else -> stringResource(R.string.log_in_to_resume)
                 },
-                avatarUrl = ready?.avatarUrl?.takeUnless { signedOutOfYouTube },
+                avatarUrl = rememberProfilePhoto() ?: ready?.avatarUrl?.takeUnless { signedOutOfYouTube },
             ) { goTo(it) }
         }
 
@@ -439,6 +439,11 @@ fun SettingsScreen(
         }
 
         // Square Fusion: no choice of backend; YouTube Music is the only one.
+
+        // Square Fusion: the picture on the home page, chosen here.
+        if (shown == SettingsPage.Account) item("fusion-profile-photo") {
+            ProfilePhotoSection(name = ready?.displayName)
+        }
 
         if (shown == SettingsPage.Account) item("youtube-account") {
             YouTubeAccountSection(
@@ -817,21 +822,21 @@ fun SettingsScreen(
         if (shown == SettingsPage.App && "fusion-performance" in openGroups) groupEnd(Group.PERFORMANCE)
 
         if (shown == SettingsPage.About) item("author") {
-            Section(stringResource(R.string.developed_by)) {
+            // Square Fusion: the repository this build comes from, where the
+            // original developer's page and Ko-fi link were.
+            Section(stringResource(R.string.fusion_source_code)) {
                 val uriHandler = LocalUriHandler.current
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clickable { uriHandler.openUri(GITHUB_URL) }
+                        .clickable { uriHandler.openUri(FUSION_REPO_URL) }
                         .padding(horizontal = 18.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // GitHub serves the account picture at `<user>.png`, so the
-                    // avatar follows whatever it is set to rather than being a
-                    // copy checked in here.
+                    // GitHub serves the account picture at `<user>.png`.
                     Artwork(
-                        url = "$GITHUB_URL.png",
-                        title = GITHUB_USER,
+                        url = "https://github.com/$FUSION_OWNER.png",
+                        title = FUSION_OWNER,
                         modifier = Modifier
                             .size(54.dp)
                             .softShadow(CircleShape, elevation = 10.dp),
@@ -843,34 +848,9 @@ fun SettingsScreen(
                             .weight(1f)
                             .padding(start = 14.dp),
                     ) {
-                        Text(GITHUB_USER, style = MaterialTheme.typography.titleMedium)
+                        Text(FUSION_OWNER, style = MaterialTheme.typography.titleMedium)
                         Text(
-                            GITHUB_URL.removePrefix("https://"),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = InkDim,
-                        )
-                    }
-                    Icon(
-                        PhosphorIcons.Regular.ArrowUpRight,
-                        contentDescription = null,
-                        tint = InkDim,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-                RowDivider()
-                // Beside the name rather than under About: it is about the
-                // person who makes the app, not about the build.
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { uriHandler.openUri(KOFI_URL) }
-                        .padding(horizontal = 18.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.support_development), style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            KOFI_URL.removePrefix("https://"),
+                            FUSION_REPO_URL.removePrefix("https://"),
                             style = MaterialTheme.typography.bodySmall,
                             color = InkDim,
                         )
@@ -936,19 +916,9 @@ fun SettingsScreen(
         // page, rather than a web address to go and find.
         if (shown == SettingsPage.About && "help" in openGroups) groupItem("help", Group.HELP) {
             val uriHandler = LocalUriHandler.current
+            // Square Fusion: problems with this build go to its own repository;
+            // the original developer's community channels are not listed.
             Section(stringResource(R.string.help_feedback)) {
-                ActionRow(
-                    stringResource(R.string.telegram_community),
-                    destructive = false,
-                    icon = PhosphorIcons.Regular.TelegramLogo,
-                ) { uriHandler.openUri(TELEGRAM_COMMUNITY_URL) }
-                RowDivider()
-                ActionRow(
-                    stringResource(R.string.help_discussions),
-                    destructive = false,
-                    icon = PhosphorIcons.Regular.ChatsCircle,
-                ) { uriHandler.openUri(DISCUSSIONS_URL) }
-                RowDivider()
                 ActionRow(
                     stringResource(R.string.help_report_problem),
                     destructive = false,
@@ -1118,28 +1088,13 @@ private fun SettingsIndex(
             )
         }
 
-        // Six places, and a seventh tile that is not a place: it leaves the app
-        // for the Ko-fi page. Last, and in the same shape as the rest, because
-        // it is an offer rather than a setting — asking louder than that would
-        // be asking on a screen somebody opened to change something.
-        val uriHandler = LocalUriHandler.current
+        // Square Fusion: the places, two to a row; the tile that left the app
+        // for the original developer's Ko-fi page is gone.
         val pages = SettingsPage.entries.filter { it != SettingsPage.Account && it !in FUSION_PAGES }
-        val rows = pages.chunked(2)
-        rows.forEachIndexed { index, pair ->
-            val last = index == rows.lastIndex
+        pages.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 pair.forEach { page -> PageTile(page, Modifier.weight(1f)) { onOpen(page) } }
-                // The support tile fills the gap a row of one would leave, and
-                // makes its own row when the pages divide evenly.
-                if (last && pair.size == 1) {
-                    SupportTile(Modifier.weight(1f)) { uriHandler.openUri(KOFI_URL) }
-                }
-            }
-            if (last && pair.size == 2) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SupportTile(Modifier.weight(1f)) { uriHandler.openUri(KOFI_URL) }
-                    Spacer(Modifier.weight(1f))
-                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
 
@@ -1253,18 +1208,6 @@ private fun PageTile(page: SettingsPage, modifier: Modifier = Modifier, onClick:
         icon = page.icon,
         title = stringResource(page.title),
         summary = stringResource(page.summary),
-        modifier = modifier,
-        onClick = onClick,
-    )
-}
-
-/** Not a page: the one tile that leaves the app. */
-@Composable
-private fun SupportTile(modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Tile(
-        icon = PhosphorIcons.Regular.HandHeart,
-        title = stringResource(R.string.support_development),
-        summary = KOFI_URL.removePrefix("https://"),
         modifier = modifier,
         onClick = onClick,
     )
@@ -2504,9 +2447,6 @@ private val LICENCES = listOf(
     "BitChord" to "GPL-3.0",
 )
 
-private const val GITHUB_USER = "Lelonio"
-private const val GITHUB_URL = "https://github.com/Lelonio"
-private const val KOFI_URL = "https://ko-fi.com/lelonio"
-private const val DISCUSSIONS_URL = "https://github.com/Lelonio/Square/discussions"
-private const val TELEGRAM_COMMUNITY_URL = "https://t.me/+SAOhZ4HTFpMwNDJk"
-private const val NEW_ISSUE_URL = "https://github.com/Lelonio/Square/issues/new/choose"
+private const val FUSION_OWNER = "httpsMrAbdelhak"
+private const val FUSION_REPO_URL = "https://github.com/httpsMrAbdelhak/Square_fusion"
+private const val NEW_ISSUE_URL = "$FUSION_REPO_URL/issues/new"

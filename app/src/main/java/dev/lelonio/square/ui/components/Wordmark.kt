@@ -92,6 +92,8 @@ fun AppLockup(
      * a plate is a control, and a mark in the middle of a login page is not one.
      */
     plate: dev.lelonio.square.ui.glass.backdrop.Backdrop? = null,
+    /** Square Fusion: drawn in place of the wordmark beside the mark (the home page's greeting). */
+    name: (@Composable () -> Unit)? = null,
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         if (plate == null) {
@@ -100,7 +102,7 @@ fun AppLockup(
             AppPlate(iconSize, plate)
         }
         Spacer(Modifier.width(iconSize * 0.32f))
-        SquareWordmark(nameHeight)
+        if (name != null) name() else SquareWordmark(nameHeight)
     }
 }
 

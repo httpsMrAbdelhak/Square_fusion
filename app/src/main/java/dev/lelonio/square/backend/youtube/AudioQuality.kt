@@ -39,8 +39,12 @@ object AudioQuality {
     private val _last = MutableStateFlow<Choice?>(null)
     val last: StateFlow<Choice?> = _last.asStateFlow()
 
-    fun record(choice: Choice) {
+    fun record(choice: Choice, videoId: String? = null) {
         _last.value = choice
+        if (videoId != null) {
+            _stated.value = (_stated.value - videoId).entries.toList().takeLast(KEPT - 1)
+                .associate { it.key to it.value } + (videoId to choice)
+        }
         android.util.Log.i(TAG, "audio ${choice.tier}: ${choice.codec} ${choice.kbps} kbps itag ${choice.itag}" +
             if (choice.signedIn) " (signed in)" else "")
     }
@@ -82,6 +86,51 @@ object AudioQuality {
                 .thenByDescending { isAac(it) }).first()
         }
     }
+
+    // ── Square Fusion: what the player shows about the song it is playing ──
+
+    private val _stated = MutableStateFlow<Map<String, Choice>>(emptyMap())
+
+    /** The stream chosen for each recent video id, as YouTube described it. */
+    val stated: StateFlow<Map<String, Choice>> = _stated.asStateFlow()
+
+    /** The audio as it went into the decoder: read off the stream, not announced by anyone. */
+    data class Decoded(val mime: String, val sampleRateHz: Int, val channels: Int)
+
+    private val _decoded = MutableStateFlow<Map<String, Decoded>>(emptyMap())
+
+    /** By queue entry (media id), for the recent ones. */
+    val decoded: StateFlow<Map<String, Decoded>> = _decoded.asStateFlow()
+
+    fun decoded(mediaId: String, mime: String?, sampleRateHz: Int, channels: Int) {
+        if (mime.isNullOrBlank()) return
+        _decoded.value = (_decoded.value - mediaId).entries.toList().takeLast(KEPT - 1)
+            .associate { it.key to it.value } + (mediaId to Decoded(mime, sampleRateHz, channels))
+    }
+
+    /** A codec's usual name from its MIME type; null for one this does not know. */
+    fun codecName(mime: String): String? = when (mime.lowercase()) {
+        "audio/mp4a-latm", "audio/aac" -> "AAC"
+        "audio/opus" -> "Opus"
+        "audio/vorbis" -> "Vorbis"
+        "audio/mpeg" -> "MP3"
+        "audio/flac" -> "FLAC"
+        "audio/eac3", "audio/eac3-joc" -> "E-AC-3"
+        "audio/ac3" -> "AC-3"
+        else -> null
+    }
+
+    /** The codec a stated stream is in ("M4A", "WEBMA_OPUS", "audio/mp4"…), as [codecName] names it. */
+    fun codecOfStated(choice: Choice): String? {
+        val c = choice.codec.lowercase()
+        return when {
+            "opus" in c || "webm" in c -> "Opus"
+            "mp4" in c || "m4a" in c -> "AAC"
+            else -> null
+        }
+    }
+
+    private const val KEPT = 40
 
     const val MEDIUM_TARGET_KBPS = 80
 

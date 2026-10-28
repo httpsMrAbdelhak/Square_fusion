@@ -23,6 +23,7 @@ object Fusion {
         val appContext = context.applicationContext
         app = appContext
         settings = FusionSettings(appContext)
+        runCatching { ProfilePhoto.init(appContext) }
         runCatching { PlaylistCustomizations.init(appContext) }
             .onFailure { FusionLog.w("playlist customizations unavailable: ${it.message}") }
         runCatching {

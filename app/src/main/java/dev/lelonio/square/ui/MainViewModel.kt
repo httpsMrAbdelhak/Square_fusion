@@ -2784,7 +2784,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 name = it.title,
                 artist = it.artist,
                 album = it.album.orEmpty(),
-                durationMs = it.durationMs.toLong(),
+                // Spotify's length, or the matched song's when Spotify gave none.
+                durationMs = (it.durationMs.takeIf { ms -> ms > 0 } ?: SpotifyMatches.matchedDurationMs(it.id) ?: 0).toLong(),
                 artworkUrl = it.imageUrl,
             )
         }

@@ -166,8 +166,13 @@ object SpotifyLibraryStore {
         }
     }
 
-    private fun remember(id: String, list: List<SpotifyTrack>) {
-        synchronized(tracks) { tracks[id] = list }
+    private fun remember(id: String, fresh: List<SpotifyTrack>) {
+        // A length known before is not replaced by an answer without one.
+        val list = synchronized(tracks) {
+            val known = tracks[id].orEmpty().associate { it.id to it.durationMs }
+            fresh.map { t -> if (t.durationMs > 0) t else t.copy(durationMs = known[t.id] ?: 0) }
+                .also { tracks[id] = it }
+        }
         list.forEach {
             SpotifyMatches.register(
                 it.id,

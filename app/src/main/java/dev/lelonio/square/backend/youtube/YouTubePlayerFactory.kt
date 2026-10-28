@@ -77,6 +77,21 @@ object YouTubePlayerFactory {
 
         return buildPlayer(true, mainSlot).let { exo ->
                 exo.addAnalyticsListener(Diagnostics)
+                // Square Fusion: what the decoder is given, for the queue entry it
+                // belongs to; the player's quality line reads it. See AudioQuality.
+                exo.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+                    override fun onAudioInputFormatChanged(
+                        eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                        format: androidx.media3.common.Format,
+                        decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?,
+                    ) {
+                        if (eventTime.timeline.isEmpty) return
+                        val item = eventTime.timeline
+                            .getWindow(eventTime.windowIndex, androidx.media3.common.Timeline.Window())
+                            .mediaItem
+                        AudioQuality.decoded(item.mediaId, format.sampleMimeType, format.sampleRate, format.channelCount)
+                    }
+                })
                 // A song YouTube plays only to an account, with none signed in:
                 // said, and passed over, rather than left at --:-- with no word
                 // of why. See SignedInStreams.
@@ -519,6 +534,7 @@ private class YouTubeStreamResolver(
                 ?.let { (url, format) ->
                     AudioQuality.record(
                         AudioQuality.Choice(tier, format.mimeType.substringBefore(';'), format.bitrate / 1000, format.itag, signedIn = true),
+                        videoId,
                     )
                     return url
                 }
@@ -533,6 +549,7 @@ private class YouTubeStreamResolver(
         if (heard) {
             AudioQuality.record(
                 AudioQuality.Choice(tier, chosen.format?.name ?: "?", chosen.averageBitrate, chosen.itag, signedIn = false),
+                videoId,
             )
         }
         return chosen.content

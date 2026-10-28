@@ -75,6 +75,14 @@ object SpotifyMatches {
     fun known(spotifyId: String): String? =
         matched[spotifyId] ?: prefs?.getString(KEY_MATCH + spotifyId, null)?.also { matched[spotifyId] = it }
 
+    /**
+     * The length of the YouTube Music song matched to [spotifyId], in
+     * milliseconds, or null before it is matched. The match is the same
+     * recording (see [score]), so its length is the song's.
+     */
+    fun matchedDurationMs(spotifyId: String): Int? =
+        prefs?.getInt(KEY_SECONDS + spotifyId, 0)?.takeIf { it > 0 }?.times(1000)
+
     private fun targetOf(spotifyId: String): Target? =
         targets[spotifyId] ?: prefs?.getString(KEY_TARGET + spotifyId, null)?.let(::decode)?.also { targets[spotifyId] = it }
 
@@ -95,7 +103,10 @@ object SpotifyMatches {
             throw NotFound(spotifyId)
         }
         matched[spotifyId] = found.id
-        prefs?.edit()?.putString(KEY_MATCH + spotifyId, found.id)?.apply()
+        prefs?.edit()?.putString(KEY_MATCH + spotifyId, found.id)?.apply {
+            // The matched song's length, for a Spotify song listed without one.
+            found.duration?.takeIf { it > 0 }?.let { putInt(KEY_SECONDS + spotifyId, it) }
+        }?.apply()
         FusionLog.i("match $spotifyId \"${target.title}\" by ${target.artist} -> ${found.id} \"${found.title}\"")
         _resolved.tryEmit(uriFor(spotifyId) to "$TRACK_PREFIX${found.id}")
         return found.id
@@ -191,6 +202,7 @@ object SpotifyMatches {
     private const val FILE = "square_fusion_spotify_matches"
     private const val KEY_MATCH = "m:"
     private const val KEY_TARGET = "t:"
+    private const val KEY_SECONDS = "s:"
     private const val SEP = "\u001F"
     private const val MISS_TTL_MS = 2 * 60 * 1000L
     private const val DURATION_REJECT_SEC = 15

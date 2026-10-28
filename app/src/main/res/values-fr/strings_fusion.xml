@@ -31,4 +31,15 @@
     <string name="fusion_download_quality">Qualité des téléchargements</string>
     <string name="fusion_download_quality_note">S’applique aux titres téléchargés à partir de maintenant ; les titres déjà téléchargés gardent la leur. Les débits sont ceux que YouTube indique pour chaque flux.</string>
     <string name="fusion_original_cover">Pochette d’origine</string>
+    <string name="fusion_source_code">Code source</string>
+    <string name="fusion_profile_photo">Photo de profil</string>
+    <string name="fusion_profile_photo_choose">Choisir une photo</string>
+    <string name="fusion_profile_photo_reset">Utiliser la photo du compte</string>
+    <string name="fusion_greeting_morning">Bonjour</string>
+    <string name="fusion_greeting_morning_name">Bonjour, %1$s</string>
+    <string name="fusion_greeting_afternoon">Bon après-midi</string>
+    <string name="fusion_greeting_afternoon_name">Bon après-midi, %1$s</string>
+    <string name="fusion_greeting_evening">Bonsoir</string>
+    <string name="fusion_greeting_evening_name">Bonsoir, %1$s</string>
+    <string name="fusion_quality_line">%1$s · %2$d kbps</string>
 </resources>

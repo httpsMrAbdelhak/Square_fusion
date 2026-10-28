@@ -31,4 +31,15 @@
     <string name="fusion_download_quality">Download quality</string>
     <string name="fusion_download_quality_note">Applies to songs downloaded from now on; songs already downloaded keep theirs. Rates are the ones YouTube states for each stream.</string>
     <string name="fusion_original_cover">Original cover</string>
+    <string name="fusion_source_code">Source code</string>
+    <string name="fusion_profile_photo">Profile picture</string>
+    <string name="fusion_profile_photo_choose">Choose a picture</string>
+    <string name="fusion_profile_photo_reset">Use the account’s picture</string>
+    <string name="fusion_greeting_morning">Good morning</string>
+    <string name="fusion_greeting_morning_name">Good morning, %1$s</string>
+    <string name="fusion_greeting_afternoon">Good afternoon</string>
+    <string name="fusion_greeting_afternoon_name">Good afternoon, %1$s</string>
+    <string name="fusion_greeting_evening">Good evening</string>
+    <string name="fusion_greeting_evening_name">Good evening, %1$s</string>
+    <string name="fusion_quality_line">%1$s · %2$d kbps</string>
 </resources>

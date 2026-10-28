@@ -36,6 +36,10 @@ class YouTubeAccount(context: Context) {
     private val _accountName = MutableStateFlow(prefs.getString(KEY_NAME, null))
     val accountName: StateFlow<String?> = _accountName.asStateFlow()
 
+    /** Square Fusion: the signed-in account's picture, as YouTube gives it; null when it gives none. */
+    private val _accountPhoto = MutableStateFlow(prefs.getString(KEY_PHOTO, null))
+    val accountPhoto: StateFlow<String?> = _accountPhoto.asStateFlow()
+
     val isSignedIn: Boolean get() = prefs.getString(KEY_COOKIE, null) != null
 
     /**
@@ -215,6 +219,11 @@ class YouTubeAccount(context: Context) {
                     prefs.edit().putString(KEY_NAME, info.name).apply()
                     _accountName.value = info.name
                 }
+                val photo = info.thumbnailUrl?.takeIf { it.isNotBlank() }
+                if (photo != _accountPhoto.value) {
+                    prefs.edit().putString(KEY_PHOTO, photo).apply()
+                    _accountPhoto.value = photo
+                }
             }
             .onFailure {
                 // Only a refusal means the session is done. A phone with no
@@ -231,6 +240,7 @@ class YouTubeAccount(context: Context) {
     fun signOut() {
         prefs.edit().clear().apply()
         _accountName.value = null
+        _accountPhoto.value = null
         _expired.value = false
         // The web view's store too, or the next sign-in would walk straight
         // back into the account that was just left.
@@ -246,6 +256,7 @@ class YouTubeAccount(context: Context) {
         const val KEY_VISITOR_DATA = "visitor_data"
         const val KEY_DATA_SYNC_ID = "data_sync_id"
         const val KEY_NAME = "name"
+        const val KEY_PHOTO = "square_fusion_photo"
         const val KEY_PAGE_ID = "page_id"
         const val MUSIC_URL = "https://music.youtube.com"
         const val TAG = "SquareYouTubeAccount"
