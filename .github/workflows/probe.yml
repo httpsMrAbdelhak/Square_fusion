@@ -1,4 +1,4 @@
-name: Apple probe
+name: Podcast probe
 on:
   push:
     branches: [probe]
@@ -7,13 +7,12 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
       - run: |
-          UA="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36"
-          curl -sL -A "$UA" "https://music.apple.com/us/playlist/todays-hits/pl.f4d106fed2bd41149aaacabb233eb5eb" -o a.html -w "apple %{http_code}\n" > out.txt
-          python3 probe/apple.py a.html >> out.txt 2>&1 || true
-          curl -sL -A "$UA" "https://music.apple.com/fr/playlist/pl.u-zzzzzzzzzzzz" -o b.html -w "private %{http_code}\n" >> out.txt
-          curl -sL -A "$UA" "https://music.apple.com/us/album/1440818839" -o c.html -w "album %{http_code}\n" >> out.txt
-          head -c 60000 out.txt | split -l 45 - part-
+          ./gradlew :app:testDevUnitTest --tests 'dev.lelonio.square.probe.*' -i > log.txt 2>&1 || true
+          grep -E "PROBE|FAILED|error:|^e: " log.txt | head -n 120 > out.txt
+          split -l 40 out.txt part-
           for p in part-*; do msg=$(sed 's/%/%25/g' "$p" | awk '{printf "%s%%0A", $0}'); echo "::notice title=$p::$msg"; done
