@@ -225,10 +225,9 @@ object Routes {
 }
 
 /** How the player settles when it is not being dragged. */
-private val expandSpec = spring<Float>(
-    dampingRatio = 0.86f,
-    stiffness = Spring.StiffnessMediumLow,
-)
+// Square Fusion: BitChord's slide — critically damped, never bouncing — so the
+// cover is followed home rather than overshooting it; see PlayerDock.Slide.
+private val expandSpec = dev.lelonio.square.ui.player.PlayerDock.Slide
 
 private val BottomBarHeight = 62.dp
 
@@ -952,6 +951,11 @@ fun SquareApp(
     // see NowPlayingSheet for why the player stopped being a route.
     val expand = remember { Animatable(if (preferences.playerWasOpen()) 1f else 0f) }
 
+    // Square Fusion: the bar's cover and the player's picture, as the two ends
+    // of one trip; see PlayerDock.
+    val playerDock = remember { dev.lelonio.square.ui.player.PlayerDock() }
+    playerDock.progress = { expand.value }
+
     // Open and standing still. Derived rather than read straight, so what
     // depends on it recomposes twice a journey instead of on every frame of
     // one; see the player's ambient background.
@@ -1600,6 +1604,7 @@ fun SquareApp(
                             else Modifier,
                         ),
                 ) {
+                androidx.compose.runtime.CompositionLocalProvider(dev.lelonio.square.ui.player.LocalPlayerDock provides playerDock) {
                 // Same trade for the page layer: the only things that read it
                 // are the tab bar and the mini player, and a fully open player
                 // covers both. Derived so it flips once at the end of the
@@ -2370,6 +2375,7 @@ fun SquareApp(
                     val playerTravelPx = with(density) {
                         (LocalConfiguration.current.screenHeightDp.dp - MiniPlayerHeight).toPx()
                     }
+                    val pullFlingPx = with(density) { dev.lelonio.square.ui.player.PlayerDock.PullFlingVelocity.toPx() }
                     val accessory: (@Composable androidx.compose.animation.SharedTransitionScope.(
                         Modifier,
                         androidx.compose.animation.AnimatedVisibilityScope,
@@ -2394,7 +2400,7 @@ fun SquareApp(
                                     .draggable(
                                         state = rememberDraggableState { delta ->
                                             scope.launch {
-                                                val travel = playerTravelPx
+                                                val travel = playerDock.travel.takeIf { it > 0f } ?: playerTravelPx
                                                 if (travel > 0f) {
                                                     expand.snapTo(
                                                         (expand.value - delta / travel)
@@ -2406,13 +2412,22 @@ fun SquareApp(
                                         orientation = androidx.compose.foundation.gestures.Orientation.Vertical,
                                         onDragStopped = { velocity ->
                                             scope.launch {
+                                                // BitChord's: a flick decides on
+                                                // its own, either way; otherwise
+                                                // where the finger left it, and
+                                                // its speed carries into the slide.
+                                                val travel = playerDock.travel.takeIf { it > 0f } ?: playerTravelPx
                                                 val target = when {
-                                                    velocity < -800f -> 1f
-                                                    velocity > 800f -> 0f
-                                                    expand.value > 0.4f -> 1f
+                                                    velocity <= -pullFlingPx -> 1f
+                                                    velocity >= pullFlingPx -> 0f
+                                                    expand.value > 0.5f -> 1f
                                                     else -> 0f
                                                 }
-                                                expand.animateTo(target, expandSpec)
+                                                expand.animateTo(
+                                                    target,
+                                                    expandSpec,
+                                                    initialVelocity = if (travel > 0f) -velocity / travel else 0f,
+                                                )
                                             }
                                         },
                                     ),
@@ -3009,6 +3024,7 @@ fun SquareApp(
                 if (playback.hasItem && chrome > 0.01f) {
                     Box(Modifier.fillMaxSize().graphicsLayer { alpha = chrome }) {
                     NowPlayingSheet(
+                        dock = playerDock,
                         progress = expand,
                         background = {
                           Box(Modifier.fillMaxSize().layerBackdrop(playerBackdrop)) {
@@ -3088,6 +3104,8 @@ fun SquareApp(
                             val collapseTravelPx = with(LocalDensity.current) {
                                 (LocalConfiguration.current.screenHeightDp.dp - MiniPlayerHeight).toPx()
                             }
+                            val closeFlingPx = with(LocalDensity.current) { dev.lelonio.square.ui.player.PlayerDock.CloseVelocity.toPx() }
+                            val closeDistancePx = with(LocalDensity.current) { dev.lelonio.square.ui.player.PlayerDock.CloseDistance.toPx() }
                             PlayerScreen(
                                 state = playerState,
                                 djSpeaking = djSpeaking,
@@ -3145,17 +3163,20 @@ fun SquareApp(
                                 // finger, as the drag up from the bar holds it.
                                 onCollapseDrag = { dy ->
                                     scope.launch {
-                                        val travel = collapseTravelPx
+                                        val travel = playerDock.travel.takeIf { it > 0f } ?: collapseTravelPx
                                         if (travel > 0f) expand.snapTo((expand.value - dy / travel).coerceIn(0f, 1f))
                                     }
                                 },
                                 onCollapseRelease = { velocity ->
                                     scope.launch {
-                                        val travel = collapseTravelPx
+                                        val travel = playerDock.travel.takeIf { it > 0f } ?: collapseTravelPx
+                                        // As BitChord's player sheet (Material's):
+                                        // closed past 56dp or by a flick down,
+                                        // back up by a flick up.
                                         val target = when {
-                                            velocity > 800f -> 0f
-                                            velocity < -800f -> 1f
-                                            expand.value < 0.8f -> 0f
+                                            velocity >= closeFlingPx -> 0f
+                                            velocity <= -closeFlingPx -> 1f
+                                            (1f - expand.value) * travel >= closeDistancePx -> 0f
                                             else -> 1f
                                         }
                                         expand.animateTo(
@@ -3484,7 +3505,8 @@ fun SquareApp(
                     dev.lelonio.square.ui.player.DjStarting()
                 }
 
-                }
+                                }
+}
 
                 // Above the tab bar and the now-playing bar, which is the whole
                 // reason it lives here instead of in the screen that asked for

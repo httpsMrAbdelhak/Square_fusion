@@ -774,8 +774,33 @@ fun PlayerScreen(
                 label = "coverFade",
             )
 
+            // Square Fusion: the picture's slot, as the player's end of its
+            // docking with the bar; see PlayerDock. Only while the picture is
+            // what fills the top: a Canvas or a video there keeps the plain rise.
+            val dock = LocalPlayerDock.current
+            val dockUrl = (coverHeroUrl ?: coverSquareUrl ?: state.artworkUrl.takeIf { !coverPending })
+                .takeIf { coverFade >= 0.999f }
+            androidx.compose.runtime.SideEffect { dock?.playerUrl = dockUrl }
+            androidx.compose.runtime.DisposableEffect(dock) { onDispose { dock?.playerUrl = null } }
+            if (dock != null && dockUrl != null) {
+                val slot = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+                androidx.compose.runtime.DisposableEffect(dock) {
+                    onDispose { slot[0]?.let(dock::releasePlayerArt) }
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(DETAIL_ASPECT)
+                        .onPlaced { coordinates ->
+                            slot[0] = coordinates
+                            dock.reportPlayerArt(coordinates)
+                        },
+                )
+            }
+
             if (coverFade > 0f) {
-                Box(Modifier.fillMaxSize().graphicsLayer { alpha = coverFade }) {
+                // Stands aside while the picture flies, so it is never there twice.
+                Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (dock?.docking() == true) 0f else coverFade }) {
                 // The cover, shown the way every other screen in the app shows
                 // a picture it is built around: filling the top, softening on
                 // the way down, ending on the colour taken from it. A track

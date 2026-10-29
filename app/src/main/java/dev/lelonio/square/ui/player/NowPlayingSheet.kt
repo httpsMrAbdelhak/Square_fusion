@@ -17,6 +17,11 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
@@ -69,6 +74,13 @@ fun NowPlayingSheet(
      * Canvas to cover it.
      */
     background: @Composable () -> Unit,
+    /**
+     * Square Fusion: the bar's cover and the player's picture, when both are on
+     * screen. With them the player slides up as a sheet and its picture flies
+     * from the bar's cover to its place (BitChord's docking, see [PlayerDock]);
+     * without them — a Canvas or a video at the top — it rises and fades as before.
+     */
+    dock: PlayerDock? = null,
     expandedContent: @Composable () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -97,13 +109,9 @@ fun NowPlayingSheet(
         // motion may depend on which way it is going.
         fun settle(target: Float) {
             scope.launch {
-                progress.animateTo(
-                    target,
-                    // Slightly under-damped: it arrives with the smallest
-                    // settle rather than stopping dead, which is what makes a
-                    // panel this size feel like it has weight.
-                    spring(dampingRatio = 0.86f, stiffness = Spring.StiffnessMediumLow),
-                )
+                // Square Fusion: BitChord's slide, the one every open and
+                // close of the player runs on; see PlayerDock.Slide.
+                progress.animateTo(target, PlayerDock.Slide)
             }
         }
 
@@ -120,8 +128,17 @@ fun NowPlayingSheet(
             Box(
                 Modifier
                     .fillMaxSize()
+                    .onSizeChanged { dock?.travel = it.height.toFloat() }
                     .graphicsLayer {
                         val f = progress.value.coerceIn(0f, 1f)
+                        if (dock != null && dock.ready()) {
+                            // A sheet: up from below its own height, the
+                            // picture travelling separately on top.
+                            translationY = dock.offset()
+                            alpha = if (f < 1f) dock.contentAlpha() else 1f
+                            compositingStrategy = CompositingStrategy.ModulateAlpha
+                            return@graphicsLayer
+                        }
                         alpha = f
                         // Rises into place from just below, slightly smaller.
                         // Small numbers on purpose — this is the player arriving
@@ -150,9 +167,83 @@ fun NowPlayingSheet(
                     expandedContent()
                 }
             }
+            if (dock != null) DockedPicture(dock)
         }
     }
 }
+
+/**
+ * Square Fusion: the one picture that travels between the bar and the player,
+ * drawn over both while it is on its way and nowhere at either end. Laid out
+ * afresh each frame at the dock's rect, so the crop follows the shape — the
+ * bar's square becoming the player's three by four — rather than a fixed image
+ * being scaled. The bar's picture and the player's are both drawn, the player's
+ * coming up as it arrives, so a track whose player shows a taller picture of
+ * its own changes over on the way rather than at either end.
+ */
+@Composable
+private fun DockedPicture(dock: PlayerDock) {
+    val miniUrl = dock.miniUrl
+    val playerUrl = dock.playerUrl
+    if (miniUrl == null || playerUrl == null) return
+    val origin = remember { floatArrayOf(0f, 0f) }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onGloballyPositioned {
+                val at = it.localToWindow(androidx.compose.ui.geometry.Offset.Zero)
+                origin[0] = at.x
+                origin[1] = at.y
+            },
+    ) {
+        Box(
+            Modifier
+                .layout { measurable, constraints ->
+                    val rect = if (dock.docking()) dock.coverRect() else null
+                    if (rect == null || rect.width < 1f || rect.height < 1f) {
+                        val placeable = measurable.measure(Constraints.fixed(0, 0))
+                        return@layout layout(0, 0) { placeable.place(0, 0) }
+                    }
+                    val placeable = measurable.measure(
+                        Constraints.fixed(rect.width.roundToInt(), rect.height.roundToInt()),
+                    )
+                    layout(constraints.maxWidth, constraints.maxHeight) {
+                        placeable.place((rect.left - origin[0]).roundToInt(), (rect.top - origin[1]).roundToInt())
+                    }
+                }
+                .graphicsLayer {
+                    alpha = if (dock.docking()) 1f else 0f
+                    shape = RoundedCornerShape(dock.coverCorner())
+                    clip = true
+                },
+        ) {
+            dev.lelonio.square.ui.components.Artwork(
+                url = miniUrl,
+                title = "",
+                modifier = Modifier.fillMaxSize(),
+                corner = 0.dp,
+                // The bar's own decode, already in memory: the trip starts on
+                // the very picture the bar shows.
+                decodeSize = MiniArtDecode,
+                crossfadeMs = 0,
+                fallback = false,
+            )
+            dev.lelonio.square.ui.components.Artwork(
+                url = playerUrl,
+                title = "",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = dock.progress().coerceIn(0f, 1f) },
+                corner = 0.dp,
+                crossfadeMs = 0,
+                fallback = false,
+            )
+        }
+    }
+}
+
+/** The bar's cover decode size; see FloatingMiniPlayer's ArtSize. */
+internal val MiniArtDecode = 40.dp
 
 /** How small the player starts, growing to its own size as it arrives. */
 private const val ENTER_SCALE = 0.92f

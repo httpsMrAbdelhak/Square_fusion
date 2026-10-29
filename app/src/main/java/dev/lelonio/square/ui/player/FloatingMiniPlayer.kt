@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
@@ -203,7 +204,8 @@ fun FloatingMiniPlayer(
             } else Artwork(
                 url = state.artworkUrl,
                 title = state.title,
-                modifier = Modifier.size(artSize),
+                // Square Fusion: one end of the player's docking; see PlayerDock.
+                modifier = Modifier.size(artSize).dockMiniArt(state.artworkUrl),
                 corner = 9.dp,
                 decodeSize = ArtSize,
             )
@@ -329,4 +331,25 @@ fun FloatingMiniPlayer(
             drawStopIndicator = {},
         )
     }
+}
+
+/**
+ * Square Fusion: the bar's cover as the end of the player's picture trip — see
+ * [PlayerDock]. Reports where it is when placed, and stands aside while the
+ * player's picture is on its way to or from here, read at draw time.
+ */
+@Composable
+private fun Modifier.dockMiniArt(url: String?): Modifier {
+    val dock = LocalPlayerDock.current ?: return this
+    val placed = androidx.compose.runtime.remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    androidx.compose.runtime.SideEffect { dock.miniUrl = url }
+    androidx.compose.runtime.DisposableEffect(dock) {
+        onDispose { placed[0]?.let(dock::releaseMiniArt) }
+    }
+    return this
+        .onPlaced { coordinates ->
+            placed[0] = coordinates
+            dock.reportMiniArt(coordinates, 9.dp)
+        }
+        .graphicsLayer { alpha = if (dock.docking()) 0f else 1f }
 }
