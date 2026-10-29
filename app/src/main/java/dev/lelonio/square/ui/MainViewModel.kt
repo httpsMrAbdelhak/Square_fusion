@@ -6013,6 +6013,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun prefetchArt(title: String, album: String, artist: String) {
         if (artist.isBlank() || dev.lelonio.square.playback.OfflineMode.active.value) return
+        // Square Fusion: Apple's pictures only with Apple chosen; see loadNowPlayingArt.
+        if (container.preferences.animatedCoverSource.value !=
+            dev.lelonio.square.data.PreferencesStore.CoverSource.APPLE_MUSIC
+        ) return
         prefetchArtJob?.cancel()
         prefetchArtJob = viewModelScope.launch {
             val found = dev.lelonio.square.data.AppleCatalog.album(album, artist)
@@ -6124,7 +6128,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Called when the track changes; cached and cheap on a repeat. */
-    fun loadNowPlayingArt(uri: String?, title: String, album: String, artist: String) {
+    fun loadNowPlayingArt(uri: String?, title: String, album: String, artist: String, durationMs: Long = 0L) {
         nowPlayingArtJob?.cancel()
         _nowPlayingArt.value = null
         if (artist.isBlank()) {
@@ -6132,10 +6136,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         _nowPlayingArtPending.value = true
+        // Square Fusion: the pictures come from the source chosen for covers.
+        // With Spotify (Canvas) chosen, nothing is asked of Apple: the song's
+        // own cover is the one, and only a music video looks further, for its
+        // song's (see SpotifyMatches.songCoverForVideo).
+        val appleCovers = container.preferences.animatedCoverSource.value ==
+            dev.lelonio.square.data.PreferencesStore.CoverSource.APPLE_MUSIC
         nowPlayingArtJob = viewModelScope.launch {
             launch {
                 delay(ART_WAIT_MS)
                 _nowPlayingArtPending.value = false
+            }
+
+            if (!appleCovers) {
+                _nowPlayingArt.value = videoSongCover(uri, title, artist, album, durationMs)
+                    ?.let { dev.lelonio.square.data.AppleCatalog.Album(heroUrl = null, coverUrl = it) }
+                _nowPlayingArtPending.value = false
+                return@launch
             }
 
             // What came down with the download, first and without asking
@@ -6201,6 +6218,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // artwork at several thousand.
             if (found?.coverUrl == null && title.isNotBlank()) {
                 val fromSong = dev.lelonio.square.data.AppleCatalog.song(title, artist, record)
+                    // Square Fusion: a music video with no record of its own
+                    // named: its song's cover on YouTube Music, if that is sure.
+                    ?: videoSongCover(uri, title, artist, record, durationMs)
                 if (fromSong != null) {
                     _nowPlayingArt.value = (found ?: dev.lelonio.square.data.AppleCatalog.Album(
                         heroUrl = null,
@@ -6209,6 +6229,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             _nowPlayingArtPending.value = false
+        }
+    }
+
+    /**
+     * Square Fusion: for a YouTube Music video, the cover of the song it is the
+     * clip of; null for anything else, or when that song is not certain.
+     */
+    private suspend fun videoSongCover(uri: String?, title: String, artist: String, album: String, durationMs: Long): String? {
+        val track = uri ?: return null
+        if (!track.startsWith(dev.lelonio.square.backend.youtube.YouTubeBackend.TRACK_PREFIX) || album.isNotBlank()) return null
+        val videoId = dev.lelonio.square.backend.youtube.YouTubeBackend.videoIdOfUri(track)
+        if (SpotifyMatches.isPlaceholder(videoId) || dev.lelonio.square.playback.OfflineMode.active.value) return null
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                SpotifyMatches.songCoverForVideo(videoId, title, artist, (durationMs / 1000).toInt().takeIf { it > 0 })
+            }.getOrNull()
         }
     }
 

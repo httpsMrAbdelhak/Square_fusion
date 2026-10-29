@@ -33,6 +33,7 @@ class LanguageStore(context: Context) {
     val tag: StateFlow<String> = _tag.asStateFlow()
 
     private val _country = MutableStateFlow(prefs.getString(KEY_COUNTRY, null).orEmpty())
+        .also { chosenCountry = it.value }
 
     /**
      * Square Fusion: the country the music is chosen for, as an ISO 3166 code,
@@ -45,6 +46,7 @@ class LanguageStore(context: Context) {
         val clean = code.uppercase().takeIf { it.length == 2 }.orEmpty()
         if (clean == _country.value) return
         _country.value = clean
+        chosenCountry = clean
         prefs.edit().putString(KEY_COUNTRY, clean).apply()
         applyToYouTube()
         dev.lelonio.square.backend.youtube.YouTubeBackend.regionChanged()
@@ -152,6 +154,11 @@ class LanguageStore(context: Context) {
 
         /** Bumped each time another country is chosen, for the pages read for the old one. */
         val countryChanges: StateFlow<Int> = _countryChanges.asStateFlow()
+
+        /** The content country chosen, or empty for automatic; for the catalogues asked outside YouTube Music. */
+        @Volatile
+        var chosenCountry: String = ""
+            private set
 
         const val FILE_NAME = "square_language"
         const val KEY_LANGUAGE = "language"

@@ -1,5 +1,6 @@
 package dev.lelonio.square.fusion.spotify
 
+import dev.lelonio.square.backend.youtube.atSize
 import android.content.Context
 import android.content.SharedPreferences
 import com.metrolist.innertube.YouTube
@@ -72,6 +73,17 @@ object SpotifyMatches {
         prefs?.edit()?.putString(KEY_TARGET + spotifyId, encode(target))?.apply()
     }
 
+    /**
+     * The Spotify song a YouTube Music song was found for, or null when it was
+     * not found for one: what the player knows a renamed song by.
+     */
+    fun spotifyIdOf(videoId: String): String? {
+        matched.entries.firstOrNull { it.value == videoId }?.let { return it.key }
+        val stored = prefs?.all ?: return null
+        val key = stored.entries.firstOrNull { (k, v) -> k.startsWith(KEY_MATCH) && v == videoId }?.key ?: return null
+        return key.removePrefix(KEY_MATCH).also { matched[it] = videoId }
+    }
+
     fun known(spotifyId: String): String? =
         matched[spotifyId] ?: prefs?.getString(KEY_MATCH + spotifyId, null)?.also { matched[spotifyId] = it }
 
@@ -130,6 +142,55 @@ object SpotifyMatches {
         // No answer at all is the network, not a song missing from YouTube Music.
         if (!answered) throw java.io.IOException("YouTube Music search failed: ${failure?.message}", failure)
         return null
+    }
+
+    /**
+     * Square Fusion: the cover of the YouTube Music song a music video is the
+     * clip of — "Company" the video, wearing "Company" the record's sleeve —
+     * or null when there is no single, unambiguous one.
+     *
+     * The same strict reading as matching a Spotify song: the same title once
+     * "(Official Music Video)" and the like are taken off, the same version
+     * (not a remix, a live take, a cover), the same artist. Lengths are not
+     * compared, since a clip runs longer than its song. Two records that both
+     * fit, and that the length cannot tell apart, are a guess, and a guess
+     * keeps the video's own picture. Answers, "none" included, are kept.
+     */
+    suspend fun songCoverForVideo(videoId: String, title: String, artist: String, durationSec: Int?): String? {
+        prefs?.getString(KEY_VIDEO_ART + videoId, null)?.let { return it.ifEmpty { null } }
+        val wanted = Target(withoutArtist(title, artist), artist, null, null)
+        val result = YouTube.search("${stripDecorations(wanted.title)} ${primaryArtist(artist)}", YouTube.SearchFilter.FILTER_SONG)
+        // No answer is the network, and is not kept as "none".
+        if (result.isFailure) return null
+        val songs = result.getOrNull()?.items.orEmpty().filterIsInstance<SongItem>()
+        // The one playing is a song itself, with its own cover: nothing to find.
+        if (songs.any { it.id == videoId }) {
+            prefs?.edit()?.putString(KEY_VIDEO_ART + videoId, "")?.apply()
+            return null
+        }
+        val fits = songs.filter { song ->
+            song.album != null &&
+                (score(Candidate(song.title, song.artists.joinToString(", ") { it.name }, song.album?.name, null), wanted) ?: 0) >= 150
+        }
+        val records = fits.groupBy { normalize(it.album?.name.orEmpty()) }
+        val chosen = when {
+            records.size == 1 -> fits.first()
+            records.isEmpty() -> null
+            durationSec == null -> null
+            else -> fits.minByOrNull { abs((it.duration ?: Int.MAX_VALUE / 2) - durationSec) }
+                ?.takeIf { abs((it.duration ?: Int.MAX_VALUE / 2) - durationSec) <= 15 }
+        }
+        val art = chosen?.thumbnail?.atSize(544)
+        prefs?.edit()?.putString(KEY_VIDEO_ART + videoId, art.orEmpty())?.apply()
+        FusionLog.i("cover of video $videoId \"$title\": ${art?.let { "song ${chosen?.id} on \"${chosen?.album?.name}\"" } ?: "none sure, its own kept"}")
+        return art
+    }
+
+    /** "Justin Bieber - Company" as a video is titled, without the name in front. */
+    private fun withoutArtist(title: String, artist: String): String {
+        val lead = primaryArtist(artist)
+        val dash = Regex("^\\s*${Regex.escape(lead)}\\s*[-–—:]\\s*", RegexOption.IGNORE_CASE)
+        return title.replace(dash, "")
     }
 
     /** A YouTube Music row, as far as matching reads it. */
@@ -201,6 +262,7 @@ object SpotifyMatches {
 
     private const val FILE = "square_fusion_spotify_matches"
     private const val KEY_MATCH = "m:"
+    private const val KEY_VIDEO_ART = "va:"
     private const val KEY_TARGET = "t:"
     private const val KEY_SECONDS = "s:"
     private const val SEP = "\u001F"

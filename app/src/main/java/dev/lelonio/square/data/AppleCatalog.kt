@@ -292,7 +292,9 @@ object AppleCatalog {
         if (name.isBlank()) return null
         // "album2": answers filed before a moving cover counted as a picture
         // chose the edition without one and kept it for a month.
-        val key = "album2 $storefront/${artist.lowercase()}/${name.lowercase()}"
+        // Square Fusion: "album3", since the editions chosen before ranked a
+        // picture above the record's own name and were kept for a month.
+        val key = "album3 $storefront/${artist.lowercase()}/${name.lowercase()}"
         synchronized(cache) { if (cache.containsKey(key)) return cache[key] as Album? }
 
         remembered(key)?.let { row ->
@@ -335,7 +337,9 @@ object AppleCatalog {
         storefront: String = storefront(),
     ): String? {
         if (name.isBlank()) return null
-        val key = "song $storefront/${artist.lowercase()}/${name.lowercase()}/${album.lowercase()}"
+        // Square Fusion: "song2", since the rows chosen before preferred a
+        // compilation's sleeve over the song's own release.
+        val key = "song2 $storefront/${artist.lowercase()}/${name.lowercase()}/${album.lowercase()}"
         synchronized(cache) { if (cache.containsKey(key)) return cache[key] as String? }
 
         remembered(key)?.let { row ->
@@ -391,8 +395,10 @@ object AppleCatalog {
         val matches = results.mapNotNull { it.jsonObject["attributes"]?.jsonObject }
             .filter {
                 val filed = it["name"]?.jsonPrimitive?.content.orEmpty()
-                filed.equals(name, ignoreCase = true) ||
-                    plain(filed).equals(plain, ignoreCase = true)
+                (filed.equals(name, ignoreCase = true) || plain(filed).equals(plain, ignoreCase = true)) &&
+                    // Square Fusion: the same version, not a remix or live take
+                    // that the loose comparison above lets through.
+                    versionMarkers(filed) == versionMarkers(name)
             }
             .filter { row ->
                 val filed = row["artistName"]?.jsonPrimitive?.content.orEmpty()
@@ -407,16 +413,19 @@ object AppleCatalog {
         // catalogue under the name Spotify files it under.
         val match = matches.firstOrNull { row ->
             val filed = row["albumName"]?.jsonPrimitive?.content.orEmpty()
-            album.isNotBlank() && sameTitle(filed, album)
+            album.isNotBlank() && sameTitle(filed, album) && versionMarkers(filed) == versionMarkers(album)
         }
-        // Failing that, a row whose record is not simply this song again: a
-        // song row carries the sleeve of the release it was found on, and the
-        // release named after the song is the single.
+        // Square Fusion: failing that, the song's own release — the one named
+        // after it, which is its single — and nothing else. A row from any
+        // other record carries that record's sleeve, and the other records a
+        // hit is on are compilations and playlists-as-albums as often as not:
+        // that is how a song came to wear a mix's cover. With no release of
+        // its own named, the source's picture stays.
             ?: matches.firstOrNull { row ->
                 val filed = row["albumName"]?.jsonPrimitive?.content.orEmpty()
-                filed.isNotBlank() && !sameTitle(filed, name)
+                album.isBlank() && sameTitle(filed, name) && versionMarkers(filed) == versionMarkers(name)
             }
-            ?: matches.firstOrNull() ?: return null
+            ?: return null
 
         return match["artwork"]?.jsonObject?.template()?.let { size(it, COVER_PX, COVER_PX) }
     }
@@ -557,6 +566,10 @@ object AppleCatalog {
 
         val candidates = results.mapNotNull { it.jsonObject["attributes"]?.jsonObject }
             .filter { sameTitle(it["name"]?.jsonPrimitive?.content.orEmpty(), name) }
+            // Square Fusion: the record asked for, not "The Middle (Remixes)"
+            // for "The Middle": the loose comparison drops brackets, and the
+            // remix EP's sleeve is another picture.
+            .filter { versionMarkers(it["name"]?.jsonPrimitive?.content.orEmpty()) == versionMarkers(name) }
             .filter { row ->
                 val filed = row["artistName"]?.jsonPrimitive?.content.orEmpty()
                 filed.equals(artist, ignoreCase = true) ||
@@ -610,9 +623,13 @@ object AppleCatalog {
         // A moving cover counts as a picture: some records have a portrait
         // only as a video, and ranking by the still one alone chose an
         // edition without either, so the player showed the square sleeve.
+        // Square Fusion: the edition named exactly as asked comes first, and a
+        // picture only decides between editions of that name. Ranked the
+        // other way round, a deluxe or a reissue with a tall photograph won
+        // over the record actually playing, and brought its own sleeve.
         val match = candidates.maxByOrNull { row ->
-            (if (row.tall() != null || row.motion() != null) 4 else 0) +
-                (if (exact(row)) 2 else 0) +
+            (if (exact(row)) 8 else 0) +
+                (if (row.tall() != null || row.motion() != null) 4 else 0) +
                 (if (single(row)) 0 else 1)
         }
         val attributes = match ?: return null
@@ -718,9 +735,26 @@ object AppleCatalog {
         .replace(Regex("\\s+"), " ")
         .trim()
 
-    /** The catalogue to ask, from wherever the phone says it is. */
+    /**
+     * The catalogue to ask: the music content country chosen in the settings,
+     * or wherever the phone says it is.
+     */
     private fun storefront(): String =
-        java.util.Locale.getDefault().country.lowercase().ifBlank { "us" }
+        LanguageStore.chosenCountry.lowercase().ifBlank { java.util.Locale.getDefault().country.lowercase() }.ifBlank { "us" }
+
+    /**
+     * Square Fusion: the words that make a recording another version of the
+     * same title, as the Spotify-to-YouTube matching reads them.
+     */
+    private fun versionMarkers(title: String): Set<String> {
+        val text = title.lowercase(java.util.Locale.ROOT)
+        return VERSION_WORDS.filter { Regex("\\b$it\\b").containsMatchIn(text) }.toSet()
+    }
+
+    private val VERSION_WORDS = listOf(
+        "remix", "remixes", "remixed", "live", "acoustic", "instrumental", "karaoke", "sped up",
+        "slowed", "reverb", "cover", "demo", "edit", "extended", "orchestral", "piano", "a cappella",
+    )
 
     /**
      * The developer token the web player uses, read out of the player itself.

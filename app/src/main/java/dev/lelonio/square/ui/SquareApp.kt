@@ -639,12 +639,18 @@ fun SquareApp(
     val newPage by viewModel.newPage.collectAsStateWithLifecycle()
     val followedReleases by viewModel.followedReleases.collectAsStateWithLifecycle()
 
-    LaunchedEffect(playback.mediaId, playback.title, playback.album, playback.artist) {
+    // Square Fusion: the covers' source, which decides where the pictures
+    // come from; asked again when it changes.
+    val artSource by remember(context) {
+        (context.applicationContext as dev.lelonio.square.SquareApplication).preferences.animatedCoverSource
+    }.collectAsStateWithLifecycle()
+    LaunchedEffect(playback.mediaId, playback.title, playback.album, playback.artist, artSource) {
         viewModel.loadNowPlayingArt(
             uri = playback.mediaId,
             title = playback.title,
             album = playback.album,
             artist = playback.artist,
+            durationMs = playback.durationMs,
         )
 
         // And the one after it, while there is time to spare. Read off the
@@ -759,7 +765,10 @@ fun SquareApp(
         // before the plain artist string.
         playback.copy(title = DJ_LABEL, artist = djTalkingLabel, artists = emptyList(), artistUri = null)
     } else {
-        playback
+        // Square Fusion: the one cover worked out for this song (see
+        // loadNowPlayingArt), the same in the bar, the player and behind the
+        // lyrics; the source's own until there is one.
+        nowPlayingArt?.coverUrl?.let { playback.copy(artworkUrl = it) } ?: playback
     }
 
     // Asked once per track: almost no song has a video, and the answer is two
@@ -1113,6 +1122,32 @@ fun SquareApp(
             canvas = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 dev.lelonio.square.download.DownloadExtras.localCanvas(uri)
             } ?: if (offlineNow) null else Catalog.canvas(uri)
+        }
+        // Square Fusion: on YouTube Music, Spotify's own Canvas for a song
+        // whose Spotify identity is known — one from a Spotify playlist — read
+        // with the Spotify connection in Settings; see SpotifyCanvas. A song
+        // known only to YouTube Music has none: a title alone is not the
+        // same recording.
+        if (uri != null &&
+            canvasEnabled &&
+            !offlineNow &&
+            coverSource == dev.lelonio.square.data.PreferencesStore.CoverSource.SPOTIFY &&
+            backend == dev.lelonio.square.backend.BackendId.YOUTUBE_MUSIC &&
+            uri.startsWith(dev.lelonio.square.backend.youtube.YouTubeBackend.TRACK_PREFIX)
+        ) {
+            val videoId = dev.lelonio.square.backend.youtube.YouTubeBackend.videoIdOfUri(uri)
+            val spotifyId = if (dev.lelonio.square.fusion.spotify.SpotifyMatches.isPlaceholder(videoId)) {
+                videoId.removePrefix(dev.lelonio.square.fusion.spotify.SpotifyMatches.ID_PREFIX)
+            } else {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    dev.lelonio.square.fusion.spotify.SpotifyMatches.spotifyIdOf(videoId)
+                }
+            }
+            if (spotifyId != null) {
+                if (remote == null) awaitAudible(localState)
+                canvas = dev.lelonio.square.fusion.spotify.SpotifyCanvas.clipFor(spotifyId)
+                    ?.let { dev.lelonio.square.data.CanvasClip(url = it, isVideo = true) }
+            }
         }
     }
 
@@ -2382,7 +2417,7 @@ fun SquareApp(
                     ) -> Unit)? = if (playback.hasItem) {
                         { accessoryModifier, _ ->
                             FloatingMiniPlayer(
-                                state = if (djSpeaking) playerState else playback,
+                                state = playerState,
                                 djSpeaking = djSpeaking,
                                 positionMs = positionMs,
                                 remoteLabel = remote?.takeIf { showConnectedDevice }?.let { remoteLabel },
