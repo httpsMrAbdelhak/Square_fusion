@@ -851,21 +851,22 @@ adb shell settings put global animator_duration_scale 5
 open_home motion-home
 mini="clickable and y1 > $((screen_h * 3 / 4)) and y2 < $((screen_h - 40)) and x2 - x1 > 150"
 player_open() { adb shell uiautomator dump /sdcard/p.xml > /dev/null 2>&1; adb shell cat /sdcard/p.xml | grep -q 'content-desc="Close"'; }
+# Opened, then left to finish settling (animations run five times slower here).
+wait_open() { local i; for i in $(seq 1 20); do player_open && { sleep 6; return 0; }; sleep 1; done; return 1; }
 adb shell screenrecord --time-limit 60 /sdcard/motion.mp4 > /dev/null 2>&1 &
 rec=$!
 sleep 2
 if tap_where motion-mini "$mini"; then
-  sleep 5
   adb shell dumpsys gfxinfo "$PKG" reset > /dev/null 2>&1
-  player_open && echo "OK   the bar opens the player" || { echo "FAIL the player did not open from the bar"; fail=1; }
+  wait_open && echo "OK   the bar opens the player" || { echo "FAIL the player did not open from the bar"; fail=1; }
   sleep 1
   tap_where motion-close 'desc == "Close"'; sleep 5
   player_open && { echo "FAIL the arrow did not close the player"; fail=1; } || echo "OK   the arrow closes the player into the bar"
-  tap_where motion-mini2 "$mini"; sleep 5
+  tap_where motion-mini2 "$mini"; wait_open
   # A drag down from the top of the player, released low: closes.
   adb shell input swipe 160 $((screen_h / 5)) 160 $((screen_h * 9 / 10)) 450; sleep 5
   player_open && { echo "FAIL a drag down did not close the player"; fail=1; } || echo "OK   a drag down closes the player"
-  tap_where motion-mini3 "$mini"; sleep 5
+  tap_where motion-mini3 "$mini"; wait_open
   # A short drag, let go: the player comes back up.
   adb shell input swipe 160 $((screen_h / 5)) 160 $((screen_h / 5 + 25)) 600; sleep 5
   player_open && echo "OK   a short drag lets the player settle back open" || { echo "FAIL a short drag closed the player"; fail=1; }
