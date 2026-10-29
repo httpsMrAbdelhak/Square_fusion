@@ -839,6 +839,95 @@ else
   echo "FAIL could not reach Settings, App, Appearance"; fail=1
 fi
 
+# ── 9. Player open and close (BitChord's docking) ─────────────────────────────
+step "player motion"
+open_home motion-home
+mini="clickable and y1 > $((screen_h * 3 / 4)) and y2 < $((screen_h - 40)) and x2 - x1 > 150"
+player_open() { adb shell uiautomator dump /sdcard/p.xml > /dev/null 2>&1; adb shell cat /sdcard/p.xml | grep -q 'content-desc="Close"'; }
+if tap_where motion-mini "$mini"; then
+  adb shell screenrecord --time-limit 40 /sdcard/motion.mp4 > /dev/null 2>&1 &
+  rec=$!
+  sleep 3
+  adb shell dumpsys gfxinfo "$PKG" reset > /dev/null 2>&1
+  player_open && echo "OK   the bar opens the player" || { echo "FAIL the player did not open from the bar"; fail=1; }
+  sleep 1
+  tap_where motion-close 'desc == "Close"'; sleep 3
+  player_open && { echo "FAIL the arrow did not close the player"; fail=1; } || echo "OK   the arrow closes the player into the bar"
+  tap_where motion-mini2 "$mini"; sleep 3
+  # A drag down from the top of the player, released low: closes.
+  adb shell input swipe 160 $((screen_h / 5)) 160 $((screen_h * 9 / 10)) 450; sleep 3
+  player_open && { echo "FAIL a drag down did not close the player"; fail=1; } || echo "OK   a drag down closes the player"
+  tap_where motion-mini3 "$mini"; sleep 3
+  # A short drag, let go: the player comes back up.
+  adb shell input swipe 160 $((screen_h / 5)) 160 $((screen_h / 5 + 25)) 600; sleep 3
+  player_open && echo "OK   a short drag lets the player settle back open" || { echo "FAIL a short drag closed the player"; fail=1; }
+  tap_where motion-close2 'desc == "Close"'; sleep 2
+  # Quickly, several times over.
+  for i in 1 2 3; do tap_where "motion-fast-open-$i" "$mini"; sleep 1; tap_where "motion-fast-close-$i" 'desc == "Close"'; sleep 1; done
+  sleep 2
+  player_open && { echo "FAIL the player was left open after quick opens and closes"; fail=1; } || echo "OK   quick opens and closes end in the bar"
+  dump motion-end
+  shot motion-end
+  adb shell dumpsys gfxinfo "$PKG" | grep -E "Total frames|Janky frames|90th|99th" | sed 's/^/LOG motion /'
+  wait $rec 2>/dev/null || true
+  adb pull /sdcard/motion.mp4 "$OUT/motion.mp4" > /dev/null 2>&1 && echo "LOG screen recording of the motion: motion.mp4"
+else
+  echo "WARN no now-playing bar to open the player from"; texts motion-home | tail -n 10
+fi
+
+# ── 10. Cover of a music video; regions on the New tab ─────────────────────────
+step "music video cover"
+adb logcat -c
+open_home video-home
+if tap_where video-search 'desc == "Search" or text == "Search"'; then
+  sleep 3
+  tap_where video-field '"EditText" in cls' || true
+  type_slowly "Justin Bieber Company"
+  adb shell input keyevent KEYCODE_ENTER; sleep 6
+  tap_where video-chip 'text == "Videos"' && sleep 6
+  dump video-results
+  if tap_where video-first 'text.startswith("Company") and y1 > 150'; then
+    sleep 20
+    adb logcat -d -s 'SquareFusion:*' | grep -E "cover of video" | tail -n 2 | sed 's/^/LOG /'
+    if adb logcat -d -s 'SquareFusion:*' | grep -q "cover of video"; then echo "OK   the video's song cover was looked up"; else echo "WARN no cover lookup logged for the video"; fi
+  else
+    echo "WARN no Company video in the results"; texts video-results | head -n 15
+  fi
+fi
+
+step "regions on the New tab"
+for code in DZ FR; do
+  adb logcat -c
+  name=$([ "$code" = DZ ] && echo Algeria || echo France)
+  if open_settings_app "region-$code" && tap_where "region-group-$code" 'text == "Music content country"'; then
+    sleep 2
+    tap_where "region-field-$code" '"EditText" in cls' || true
+    type_slowly "${name:0:4}"; adb shell input keyevent KEYCODE_BACK; sleep 1
+    tap_where "region-pick-$code" "text == \"$name\"" && sleep 2
+    open_home "region-home-$code"
+    tap_where "region-new-$code" '(text == "New" or desc == "New") and y1 > 400' && sleep 12
+    dump "region-new-$code"
+    adb logcat -d -s 'SquareFusion:*' 'SquareYouTube:*' | grep -E "youtube region|browsing as" | tail -n 3 | sed "s/^/LOG $code: /"
+    python3 - "$OUT/region-new-$code.xml" <<'PY' | head -n 6 | sed "s/^/LOG $code New tab: /"
+import re, sys, html
+xml = open(sys.argv[1], encoding="utf-8").read()
+for t in re.findall(r'text="([^"]+)"', xml)[:14]:
+    print(html.unescape(t))
+PY
+  fi
+done
+if [ -f "$OUT/region-new-DZ.xml" ] && [ -f "$OUT/region-new-FR.xml" ]; then
+  if cmp -s <(grep -oE 'text="[^"]+"' "$OUT/region-new-DZ.xml") <(grep -oE 'text="[^"]+"' "$OUT/region-new-FR.xml"); then
+    echo "WARN the New tab read the same for Algeria and France"
+  else
+    echo "OK   the New tab differs between Algeria and France"
+  fi
+fi
+# Back to automatic.
+if open_settings_app region-auto && tap_where region-group-auto 'text == "Music content country"'; then
+  sleep 2; tap_where region-auto-pick 'text == "Automatic"'; sleep 2
+fi
+
 alive && echo "OK   app still running" || { echo "FAIL app stopped"; fail=1; }
 adb logcat -d | grep -E "SquareFusion|SquareYTQuality|SquareUi|AndroidRuntime|FATAL" | tail -n 200 > "$OUT/logcat.txt" || true
 echo "playback result: $([ $fail = 0 ] && echo PASS || echo FAIL)"

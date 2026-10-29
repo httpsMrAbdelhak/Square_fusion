@@ -311,4 +311,30 @@ class FusionLogicTest {
         assertEquals("a1", artists.single().id)
         assertEquals("https://img/a", artists.single().imageUrl)
     }
+
+    // ── Covers ──────────────────────────────────────────────────────────
+
+    @Test
+    fun appleEditionsKeepTheirVersion() {
+        val markers = dev.lelonio.square.data.AppleCatalog::versionMarkers
+        // "The Middle (Remixes)" is another record than "The Middle".
+        org.junit.Assert.assertNotEquals(markers("The Middle"), markers("The Middle (Remixes)"))
+        // The catalogue's own suffixes are not another version.
+        assertEquals(markers("The Middle"), markers("The Middle - Single"))
+        assertEquals(markers("Company"), markers("Company"))
+        org.junit.Assert.assertNotEquals(markers("Company"), markers("Company (Live)"))
+    }
+
+    @Test
+    fun aMusicVideoIsMatchedToItsSongOnly() {
+        assertEquals("Company", SpotifyMatches.withoutArtist("Justin Bieber - Company", "Justin Bieber"))
+        assertEquals("Company (Official Music Video)", SpotifyMatches.withoutArtist("Company (Official Music Video)", "Justin Bieber"))
+        val video = SpotifyMatches.Target(SpotifyMatches.withoutArtist("Company (Official Music Video)", "Justin Bieber"), "Justin Bieber")
+        // The song itself, with no length to compare.
+        assertNotNull(SpotifyMatches.score(SpotifyMatches.Candidate("Company", "Justin Bieber", "Purpose (Deluxe)", null), video))
+        // Not a live take, not another artist, not another title.
+        assertNull(SpotifyMatches.score(SpotifyMatches.Candidate("Company (Live)", "Justin Bieber", "Live", null), video))
+        assertNull(SpotifyMatches.score(SpotifyMatches.Candidate("Company", "Someone Else", "Other", null), video))
+        assertNull(SpotifyMatches.score(SpotifyMatches.Candidate("Love Yourself", "Justin Bieber", "Purpose", null), video))
+    }
 }

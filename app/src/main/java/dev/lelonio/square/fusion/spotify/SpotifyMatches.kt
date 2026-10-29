@@ -187,7 +187,7 @@ object SpotifyMatches {
     }
 
     /** "Justin Bieber - Company" as a video is titled, without the name in front. */
-    private fun withoutArtist(title: String, artist: String): String {
+    internal fun withoutArtist(title: String, artist: String): String {
         val lead = primaryArtist(artist)
         val dash = Regex("^\\s*${Regex.escape(lead)}\\s*[-–—:]\\s*", RegexOption.IGNORE_CASE)
         return title.replace(dash, "")

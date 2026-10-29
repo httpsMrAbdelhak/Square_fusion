@@ -163,6 +163,8 @@ object AppleCatalog {
     data class Album(
         val heroUrl: String?,
         val coverUrl: String?,
+        /** Square Fusion: the edition's name as the catalogue files it, for the log and the tests. */
+        val name: String? = null,
         /**
          * The colour Apple tints the page with, as six hex digits.
          *
@@ -652,7 +654,9 @@ object AppleCatalog {
             ?: attributes["artwork"]?.jsonObject
 
         if (tall == null && cover == null) return null
+        android.util.Log.i(TAG, "album \"$name\" by $artist: edition \"${attributes["name"]?.jsonPrimitive?.content}\"")
         return Album(
+            name = attributes["name"]?.jsonPrimitive?.content,
             heroUrl = (tall ?: motionStill)?.let { size(it, DETAIL_W, DETAIL_H) },
             motionUrl = motionUrl,
             bgColor = pageArt?.get("bgColor")?.jsonPrimitive?.content,
@@ -746,7 +750,7 @@ object AppleCatalog {
      * Square Fusion: the words that make a recording another version of the
      * same title, as the Spotify-to-YouTube matching reads them.
      */
-    private fun versionMarkers(title: String): Set<String> {
+    internal fun versionMarkers(title: String): Set<String> {
         val text = title.lowercase(java.util.Locale.ROOT)
         return VERSION_WORDS.filter { Regex("\\b$it\\b").containsMatchIn(text) }.toSet()
     }

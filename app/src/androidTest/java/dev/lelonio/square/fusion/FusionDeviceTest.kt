@@ -150,4 +150,47 @@ class FusionDeviceTest {
         assertEquals(R.drawable.ic_notification, AppIcon.Square.notificationIcon)
         assertTrue(AppIcon.LiquidGlass.notificationIcon != AppIcon.Square.notificationIcon)
     }
+
+    /** A two-second silent WAV file, which Android can read the length of. */
+    private fun wav(file: java.io.File, seconds: Int) {
+        val rate = 8000
+        val samples = rate * seconds
+        val data = ByteArray(samples * 2)
+        val header = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN).apply {
+            put("RIFF".toByteArray()); putInt(36 + data.size); put("WAVE".toByteArray())
+            put("fmt ".toByteArray()); putInt(16); putShort(1); putShort(1); putInt(rate); putInt(rate * 2)
+            putShort(2); putShort(16)
+            put("data".toByteArray()); putInt(data.size)
+        }.array()
+        file.parentFile?.mkdirs()
+        file.outputStream().use { it.write(header); it.write(data) }
+    }
+
+    @Test
+    fun aDownloadKeptWithoutALengthGetsItsFilesOwn() = kotlinx.coroutines.runBlocking {
+        val store = dev.lelonio.square.data.DownloadStore(context)
+        val id = "zzLengthTest1"
+        val uri = dev.lelonio.square.backend.youtube.YouTubeBackend.TRACK_PREFIX + id
+        val file = java.io.File(java.io.File(store.root, "youtube"), "$id.wav")
+        wav(file, 2)
+        try {
+            store.addSingle(dev.lelonio.square.data.CatalogTrack(uri = uri, name = "Length test", artist = "Square Fusion", durationMs = 0))
+            store.onCompleted(uri, dev.lelonio.square.data.DownloadStore.FileRecord(id, "wav", file.length(), 0, System.currentTimeMillis()))
+            val kept = store.trackOf(uri)?.durationMs ?: 0
+            assertTrue("length read off the file: $kept ms", kept in 1900..2100)
+        } finally {
+            store.removeSingle(uri)
+            file.delete()
+        }
+    }
+
+    @Test
+    fun theMiddleIsTheRecordNotItsRemixes() = kotlinx.coroutines.runBlocking {
+        dev.lelonio.square.data.AppleCatalog.attach(context)
+        val album = dev.lelonio.square.data.AppleCatalog.album("The Middle", "Zedd, Maren Morris & Grey")
+        org.junit.Assume.assumeTrue("Apple's catalogue answered", album != null)
+        val name = album!!.name.orEmpty()
+        android.util.Log.i("FusionDeviceTest", "The Middle: edition \"$name\", cover ${album.coverUrl}")
+        assertTrue("edition \"$name\"", name.startsWith("The Middle") && !name.contains("Remix", ignoreCase = true))
+    }
 }
