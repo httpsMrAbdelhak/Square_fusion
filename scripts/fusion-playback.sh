@@ -841,38 +841,49 @@ fi
 
 # ── 9. Player open and close (BitChord's docking) ─────────────────────────────
 step "player motion"
+# A song with a cover in the bar: the imported Spotify playlist's, queued from
+# its Play button (it need not play for its cover to be the bar's).
+open_imported motion-list
+tap_where motion-play '(desc.lower() == "play" or text.lower() == "play") and clickable' || true
+sleep 6
+# Animations five times slower while recorded, so the trip shows on frames.
+adb shell settings put global animator_duration_scale 5
 open_home motion-home
 mini="clickable and y1 > $((screen_h * 3 / 4)) and y2 < $((screen_h - 40)) and x2 - x1 > 150"
 player_open() { adb shell uiautomator dump /sdcard/p.xml > /dev/null 2>&1; adb shell cat /sdcard/p.xml | grep -q 'content-desc="Close"'; }
+adb shell screenrecord --time-limit 60 /sdcard/motion.mp4 > /dev/null 2>&1 &
+rec=$!
+sleep 2
 if tap_where motion-mini "$mini"; then
-  adb shell screenrecord --time-limit 40 /sdcard/motion.mp4 > /dev/null 2>&1 &
-  rec=$!
-  sleep 3
+  sleep 5
   adb shell dumpsys gfxinfo "$PKG" reset > /dev/null 2>&1
   player_open && echo "OK   the bar opens the player" || { echo "FAIL the player did not open from the bar"; fail=1; }
   sleep 1
-  tap_where motion-close 'desc == "Close"'; sleep 3
+  tap_where motion-close 'desc == "Close"'; sleep 5
   player_open && { echo "FAIL the arrow did not close the player"; fail=1; } || echo "OK   the arrow closes the player into the bar"
-  tap_where motion-mini2 "$mini"; sleep 3
+  tap_where motion-mini2 "$mini"; sleep 5
   # A drag down from the top of the player, released low: closes.
-  adb shell input swipe 160 $((screen_h / 5)) 160 $((screen_h * 9 / 10)) 450; sleep 3
+  adb shell input swipe 160 $((screen_h / 5)) 160 $((screen_h * 9 / 10)) 450; sleep 5
   player_open && { echo "FAIL a drag down did not close the player"; fail=1; } || echo "OK   a drag down closes the player"
-  tap_where motion-mini3 "$mini"; sleep 3
+  tap_where motion-mini3 "$mini"; sleep 5
   # A short drag, let go: the player comes back up.
-  adb shell input swipe 160 $((screen_h / 5)) 160 $((screen_h / 5 + 25)) 600; sleep 3
+  adb shell input swipe 160 $((screen_h / 5)) 160 $((screen_h / 5 + 25)) 600; sleep 5
   player_open && echo "OK   a short drag lets the player settle back open" || { echo "FAIL a short drag closed the player"; fail=1; }
   tap_where motion-close2 'desc == "Close"'; sleep 2
   # Quickly, several times over.
+  adb shell settings put global animator_duration_scale 1
   for i in 1 2 3; do tap_where "motion-fast-open-$i" "$mini"; sleep 1; tap_where "motion-fast-close-$i" 'desc == "Close"'; sleep 1; done
-  sleep 2
+  sleep 3
   player_open && { echo "FAIL the player was left open after quick opens and closes"; fail=1; } || echo "OK   quick opens and closes end in the bar"
   dump motion-end
   shot motion-end
   adb shell dumpsys gfxinfo "$PKG" | grep -E "Total frames|Janky frames|90th|99th" | sed 's/^/LOG motion /'
   wait $rec 2>/dev/null || true
   adb pull /sdcard/motion.mp4 "$OUT/motion.mp4" > /dev/null 2>&1 && echo "LOG screen recording of the motion: motion.mp4"
+  adb shell settings put global animator_duration_scale 1
 else
   echo "WARN no now-playing bar to open the player from"; texts motion-home | tail -n 10
+  adb shell settings put global animator_duration_scale 1
 fi
 
 # ── 10. Cover of a music video; regions on the New tab ─────────────────────────
