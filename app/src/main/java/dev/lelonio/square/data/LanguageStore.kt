@@ -117,6 +117,7 @@ class LanguageStore(context: Context) {
             ?: "US"
         com.metrolist.innertube.YouTube.locale =
             com.metrolist.innertube.models.YouTubeLocale(gl = country, hl = language())
+        android.util.Log.i("SquareFusion", "youtube region $country (chosen: ${_country.value.ifEmpty { "automatic" }})")
     }
 
     /**

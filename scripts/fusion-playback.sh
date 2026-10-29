@@ -492,7 +492,26 @@ PY
   for i in $(seq 1 14); do
     dump add-check
     if [ -n "$title" ] && grep -qF "text=\"$title\"" "$OUT/add-check.xml"; then
-      echo "OK   the song is in the Apple Music playlist after a restart"; shot add-check; return
+      echo "OK   the song is in the Apple Music playlist after a restart"; shot add-check
+      # Whole: an artist and a length under its title, not an empty row.
+      line=$(python3 - "$OUT/add-check.xml" "$title" <<'PY'
+import re, sys, html
+xml = open(sys.argv[1], encoding="utf-8").read()
+nodes = []
+for m in re.finditer(r'<node [^>]*>', xml):
+    n = m.group(0)
+    t = html.unescape(re.search(r'text="([^"]*)"', n).group(1))
+    x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n).groups())
+    nodes.append((t, x1, y1, x2, y2))
+row = next((n for n in nodes if n[0] == sys.argv[2]), None)
+if row:
+    under = [t for t, x1, y1, x2, y2 in nodes if t and t != row[0] and row[4] - 2 <= y1 <= row[4] + 30 and abs(x1 - row[1]) < 10]
+    print(under[0] if under else "")
+PY
+)
+      if [ -n "$line" ] && echo "$line" | grep -q "[0-9]:[0-9][0-9]"; then echo "OK   the added song shows its artist and length: $line"
+      else echo "FAIL the added song's row lacks its artist or length (\"$line\")"; fail=1; fi
+      return
     fi
     adb shell input swipe 160 $((screen_h * 3 / 4)) 160 $((screen_h / 5)) 300; sleep 1
   done
@@ -572,6 +591,7 @@ song_more="desc == 'More' and y1 > 150 and y2 < $((screen_h * 3 / 4))"
 for n in 1 2 3; do
   menu_time "song-menu-$n" "$song_more" 'text="(Go to artist|Copy link|Add to queue)"' || break
   if [ "$n" = 1 ]; then
+    adb shell cat /sdcard/m.xml | grep -q 'text="Play next"' && echo "OK   song menu: Play next" || { echo "FAIL no Play next in the song menu"; fail=1; }
     if adb shell cat /sdcard/m.xml | grep -qE 'text="(Get YTDLnis|Download with YTDLnis)"'; then
       echo "FAIL the song menu still offers YTDLnis"; fail=1
     else
@@ -708,6 +728,111 @@ if tap_where avatar 'clickable and x1 > 230 and y2 < 160'; then
   fi
 else
   echo "WARN could not open the settings from the profile picture"
+fi
+
+# ── 8. Home: long press, sections; content country ─────────────────────────
+open_home() {
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
+  sleep 3
+  for i in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 1; done
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
+  sleep 4
+  tap_where "$1" '(text == "Home" or desc == "Home") and y1 > 400' || true
+  sleep 6
+}
+open_settings_app() {
+  open_home "$1-home"
+  tap_where "$1-avatar" 'clickable and x1 > 230 and y2 < 160' && sleep 4 \
+    && tap_where "$1-tile" 'text == "App"' && sleep 4
+}
+type_slowly() { local c; for c in $(echo "$1" | sed 's/./& /g'); do adb shell input text "$c"; sleep 0.3; done; }
+
+step "long press on a Home song"
+open_home home-menu
+dump home-before
+shot home-before
+if long_press_where home-song 'x1 >= 80 and x1 <= 100 and y1 > 250 and y2 < 560 and len(text) > 1'; then
+  sleep 3
+  dump home-song-menu
+  shot home-song-menu
+  if grep -q 'text="Play next"' "$OUT/home-song-menu.xml" && grep -q 'text="Add to queue"' "$OUT/home-song-menu.xml"; then
+    echo "OK   long press on a Home song opens its menu, with Play next and Add to queue"
+  else
+    echo "FAIL long press on a Home song did not open the song menu"; fail=1; texts home-song-menu | head -n 20
+  fi
+  close_menu
+else
+  echo "WARN no song row found on the Home page"; texts home-before | head -n 20
+fi
+
+step "content country"
+adb logcat -c
+if open_settings_app country && tap_where country-group 'text == "Music content country"'; then
+  sleep 3
+  for name in Algeria France; do
+    tap_where "country-field-$name" '"EditText" in cls' || true
+    adb shell input keyevent KEYCODE_MOVE_END
+    for i in $(seq 1 12); do adb shell input keyevent KEYCODE_DEL; done
+    type_slowly "${name:0:4}"
+    sleep 2
+    adb shell input keyevent KEYCODE_BACK; sleep 1
+    tap_where "country-$name" "text == \"$name\"" || { echo "FAIL $name not offered"; fail=1; texts "country-$name" | head -n 15; continue; }
+    sleep 3
+    code=$([ "$name" = Algeria ] && echo DZ || echo FR)
+    if adb logcat -d -s 'SquareFusion:*' | grep -q "youtube region $code (chosen: $code)"; then echo "OK   $name chosen: YouTube Music asked for region $code"; else echo "FAIL choosing $name did not reach YouTube Music"; fail=1; fi
+  done
+  dump country-chosen
+  grep -q 'text="France"' "$OUT/country-chosen.xml" && echo "OK   the heading shows France" || echo "WARN France not shown under the heading"
+  tap_where country-field-clear '"EditText" in cls' || true
+  adb shell input keyevent KEYCODE_MOVE_END
+  for i in $(seq 1 12); do adb shell input keyevent KEYCODE_DEL; done
+  adb shell input keyevent KEYCODE_BACK; sleep 1
+  tap_where country-auto 'text == "Automatic" and y1 > 200' && sleep 3
+  if adb logcat -d -s 'SquareFusion:*' | grep -q "chosen: automatic"; then echo "OK   back to Automatic"; else echo "FAIL Automatic was not applied"; fail=1; fi
+  adb shell am force-stop "$PKG"; sleep 2
+  adb logcat -c
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1; sleep 6
+  adb logcat -d -s 'SquareFusion:*' | grep "youtube region" | tail -n 1 | sed 's/^/LOG after restart: /'
+else
+  echo "FAIL could not reach Settings, App, Music content country"; fail=1
+fi
+
+step "home sections"
+if open_settings_app sections && tap_where appearance-group 'text == "Appearance"'; then
+  sleep 3
+  first=""
+  for i in 1 2 3 4 5; do
+    dump sections
+    first=$(python3 - "$OUT/sections.xml" <<'PY'
+import re, sys, html
+xml = open(sys.argv[1], encoding="utf-8").read()
+nodes = [(html.unescape(re.search(r'text="([^"]*)"', m.group(0)).group(1)), int(re.search(r'bounds="\[\d+,(\d+)\]', m.group(0)).group(1))) for m in re.finditer(r'<node [^>]*>', xml)]
+head = next((y for t, y in nodes if t.lower() == "home sections"), None)
+if head is not None:
+    after = [t for t, y in nodes if y > head and t and t.lower() != "home sections"]
+    if after: print(after[0])
+PY
+)
+    [ -n "$first" ] && break
+    adb shell input swipe 160 $((screen_h * 3 / 4)) 160 $((screen_h / 4)) 400; sleep 2
+  done
+  if [ -z "$first" ]; then
+    echo "FAIL no Home sections in Appearance"; fail=1; texts sections | head -n 20
+  else
+    echo "LOG first section: $first"
+    tap_where section-off "text == \"$first\"" && sleep 2
+    open_home sections-home
+    dump sections-home
+    shot sections-home
+    if grep -qF "text=\"$first\"" "$OUT/sections-home.xml"; then echo "FAIL \"$first\" still on the Home page"; fail=1
+    elif grep -qF "text=\"$first\"" "$OUT/home-before.xml"; then echo "OK   \"$first\" switched off: gone from the Home page"
+    else echo "WARN \"$first\" was not on the first screen of the Home page before either"; fi
+    # Back on, as it was.
+    open_settings_app sections2 && tap_where appearance-group2 'text == "Appearance"' && sleep 3
+    for i in 1 2 3 4 5; do tap_where section-on "text == \"$first\"" && break; adb shell input swipe 160 $((screen_h * 3 / 4)) 160 $((screen_h / 4)) 400; sleep 2; done
+  fi
+else
+  echo "FAIL could not reach Settings, App, Appearance"; fail=1
 fi
 
 alive && echo "OK   app still running" || { echo "FAIL app stopped"; fail=1; }
