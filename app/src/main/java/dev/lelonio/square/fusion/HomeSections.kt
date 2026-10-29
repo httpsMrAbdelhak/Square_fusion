@@ -23,7 +23,7 @@ object HomeSections {
 
     private val _seen = MutableStateFlow<List<String>>(emptyList())
 
-    /** The shelf titles sent so far, the latest page's first. */
+    /** The shelf titles sent so far, in the Home page's order, then older ones. */
     val seen: StateFlow<List<String>> = _seen.asStateFlow()
 
     private val _hidden = MutableStateFlow<Set<String>>(emptySet())
@@ -39,7 +39,7 @@ object HomeSections {
         _hidden.value = p.getStringSet(KEY_HIDDEN, emptySet()).orEmpty().toSet()
     }
 
-    /** Remembers the titles of a page of shelves, so they can be switched off. */
+    /** Remembers the shelves of the Home page as read so far, in order, so they can be switched off. */
     @Synchronized
     fun saw(titles: List<String>) {
         val fresh = titles.map { it.trim() }.filter { it.isNotEmpty() }.distinct()

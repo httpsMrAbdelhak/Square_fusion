@@ -804,14 +804,17 @@ if open_settings_app sections && tap_where appearance-group 'text == "Appearance
   first=""
   for i in 1 2 3 4 5; do
     dump sections
-    first=$(python3 - "$OUT/sections.xml" <<'PY'
+    first=$(python3 - "$OUT/sections.xml" "$OUT/home-before.xml" <<'PY'
 import re, sys, html
 xml = open(sys.argv[1], encoding="utf-8").read()
 nodes = [(html.unescape(re.search(r'text="([^"]*)"', m.group(0)).group(1)), int(re.search(r'bounds="\[\d+,(\d+)\]', m.group(0)).group(1))) for m in re.finditer(r'<node [^>]*>', xml)]
 head = next((y for t, y in nodes if t.lower() == "home sections"), None)
 if head is not None:
     after = [t for t, y in nodes if y > head and t and t.lower() != "home sections"]
-    if after: print(after[0])
+    home = open(sys.argv[2], encoding="utf-8").read()
+    # One the Home page showed on its first screen, so its going can be seen.
+    on_home = [t for t in after if 'text="%s"' % t in html.unescape(home)]
+    if on_home or after: print((on_home or after)[0])
 PY
 )
     [ -n "$first" ] && break
