@@ -651,6 +651,7 @@ fun SquareApp(
             album = playback.album,
             artist = playback.artist,
             durationMs = playback.durationMs,
+            artworkUrl = playback.artworkUrl,
         )
 
         // And the one after it, while there is time to spare. Read off the

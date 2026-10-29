@@ -57,6 +57,12 @@ object AppleMusicPlaylists {
             if (page.listedCount != null && page.listedCount > page.tracks.size) {
                 FusionLog.w("apple music $id: the page lists ${page.tracks.size} of ${page.listedCount} songs")
             }
+            // What a song row looks like when its picture or length did not
+            // come through, so a change in Apple's page shows in the log.
+            val bare = page.tracks.count { it.imageUrl == null || it.durationMs <= 0 }
+            if (bare > 0) {
+                FusionLog.w("apple music $id: $bare of ${page.tracks.size} songs without a picture or a length; first row: ${firstRow(html)}")
+            }
         }
     }
 
@@ -96,6 +102,15 @@ object AppleMusicPlaylists {
         )
         return Page(playlist, tracks, header.prim("trackCount")?.intOrNull)
     }
+
+    /** The first song row of the page, shortened, for the log. */
+    private fun firstRow(html: String): String = runCatching {
+        val data = DATA.find(html)?.groupValues?.get(1) ?: return "no page data"
+        val root = Json.parseToJsonElement(data) as JsonObject
+        val sections = (root.arr("data")?.firstOrNull() as? JsonObject)
+            ?.obj("data")?.arr("sections").orEmpty().filterIsInstance<JsonObject>()
+        sections.firstOrNull { it.str("itemKind") == "trackLockup" }?.arr("items")?.firstOrNull().toString().take(1800)
+    }.getOrDefault("unreadable")
 
     /** The picture's address, at a size the app shows, from Apple's "{w}x{h}{c}.{f}" template. */
     private fun artwork(item: JsonObject): String? =

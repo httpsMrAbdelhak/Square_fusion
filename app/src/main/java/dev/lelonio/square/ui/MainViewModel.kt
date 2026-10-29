@@ -6154,7 +6154,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Called when the track changes; cached and cheap on a repeat. */
-    fun loadNowPlayingArt(uri: String?, title: String, album: String, artist: String, durationMs: Long = 0L) {
+    fun loadNowPlayingArt(
+        uri: String?,
+        title: String,
+        album: String,
+        artist: String,
+        durationMs: Long = 0L,
+        /** The picture the queue carries for it, if any. */
+        artworkUrl: String? = null,
+    ) {
         nowPlayingArtJob?.cancel()
         _nowPlayingArt.value = null
         if (artist.isBlank()) {
@@ -6175,8 +6183,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
 
             if (!appleCovers) {
-                _nowPlayingArt.value = videoSongCover(uri, title, artist, album, durationMs)
-                    ?.let { dev.lelonio.square.data.AppleCatalog.Album(heroUrl = null, coverUrl = it) }
+                // A song whose list gave it no picture (an Apple Music playlist
+                // imported by link names none) wears the one YouTube Music has
+                // for the very recording playing; nothing else's.
+                _nowPlayingArt.value = (
+                    videoSongCover(uri, title, artist, album, durationMs)
+                        ?: if (artworkUrl == null) playingRecordingCover(uri) else null
+                    )?.let { dev.lelonio.square.data.AppleCatalog.Album(heroUrl = null, coverUrl = it) }
                 _nowPlayingArtPending.value = false
                 return@launch
             }
@@ -6256,6 +6269,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             _nowPlayingArtPending.value = false
         }
+    }
+
+    /**
+     * Square Fusion: YouTube Music's own picture of the recording [uri] plays —
+     * a Spotify or Apple Music song by the YouTube Music song it was matched to.
+     */
+    private suspend fun playingRecordingCover(uri: String?): String? {
+        val track = uri ?: return null
+        if (!track.startsWith(dev.lelonio.square.backend.youtube.YouTubeBackend.TRACK_PREFIX)) return null
+        if (dev.lelonio.square.playback.OfflineMode.active.value) return null
+        val videoId = dev.lelonio.square.backend.youtube.YouTubeBackend.videoIdOfUri(track)
+        val real = if (SpotifyMatches.isPlaceholder(videoId)) {
+            SpotifyMatches.known(videoId.removePrefix(SpotifyMatches.ID_PREFIX)) ?: return null
+        } else {
+            videoId
+        }
+        return runCatching {
+            container.youtubeBackend.songs(listOf(dev.lelonio.square.backend.youtube.YouTubeBackend.TRACK_PREFIX + real))
+                .firstOrNull()?.artworkUrl
+        }.getOrNull()
     }
 
     /**
