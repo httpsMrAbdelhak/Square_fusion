@@ -3083,6 +3083,11 @@ fun SquareApp(
                                       else it.copy(surfaceTintColor = playerFilm)
                                   },
                           ) {
+                            // Square Fusion: how far the player travels to the
+                            // bar, for the drag that closes it.
+                            val collapseTravelPx = with(LocalDensity.current) {
+                                (LocalConfiguration.current.screenHeightDp.dp - MiniPlayerHeight).toPx()
+                            }
                             PlayerScreen(
                                 state = playerState,
                                 djSpeaking = djSpeaking,
@@ -3136,6 +3141,30 @@ fun SquareApp(
                                     }
                                 },
                                 onCollapse = { scope.launch { expand.animateTo(0f, expandSpec) } },
+                                // Square Fusion: the same animation, held by the
+                                // finger, as the drag up from the bar holds it.
+                                onCollapseDrag = { dy ->
+                                    scope.launch {
+                                        val travel = collapseTravelPx
+                                        if (travel > 0f) expand.snapTo((expand.value - dy / travel).coerceIn(0f, 1f))
+                                    }
+                                },
+                                onCollapseRelease = { velocity ->
+                                    scope.launch {
+                                        val travel = collapseTravelPx
+                                        val target = when {
+                                            velocity > 800f -> 0f
+                                            velocity < -800f -> 1f
+                                            expand.value < 0.8f -> 0f
+                                            else -> 1f
+                                        }
+                                        expand.animateTo(
+                                            target,
+                                            expandSpec,
+                                            initialVelocity = if (travel > 0f) -velocity / travel else 0f,
+                                        )
+                                    }
+                                },
                                 onTogglePlay = {
                                     if (remote != null) {
                                         val playing = remote?.playing == true

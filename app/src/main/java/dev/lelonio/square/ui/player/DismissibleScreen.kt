@@ -44,8 +44,21 @@ import androidx.compose.ui.unit.dp
 fun DismissibleScreen(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Square Fusion: when set, the drag moves the player's own open-to-closed
+     * animation with the finger, by this many pixels (down is positive), and
+     * [onRelease] settles it with the finger's speed. The one animation the
+     * button runs too, so both end the same way; no second movement of the
+     * screen is added.
+     */
+    onDragBy: ((Float) -> Unit)? = null,
+    onRelease: ((Float) -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
+    if (onDragBy != null && onRelease != null) {
+        FollowingScreen(onDragBy, onRelease, modifier, content)
+        return
+    }
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
 
@@ -133,6 +146,84 @@ fun DismissibleScreen(
  * being moved by its handle: while it holds, dragging down does not close.
  */
 val LocalDismissLock = staticCompositionLocalOf<MutableState<Boolean>> { mutableStateOf(false) }
+
+/** Square Fusion: [DismissibleScreen] with the player following the finger. */
+@Composable
+private fun FollowingScreen(
+    onDragBy: (Float) -> Unit,
+    onRelease: (Float) -> Unit,
+    modifier: Modifier,
+    content: @Composable () -> Unit,
+) {
+    val lock = remember { mutableStateOf(false) }
+    val travel = remember { Travel() }
+    val tracker = remember { androidx.compose.ui.input.pointer.util.VelocityTracker() }
+
+    val connection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // Back up while closing: the player follows, the list stays put.
+                if (travel.fired && available.y < 0 && source == NestedScrollSource.UserInput) {
+                    onDragBy(available.y)
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
+                // As before: only a drag that starts with the content at its top.
+                if (travel.scrolled == null) travel.scrolled = consumed.y != 0f
+                if (available.y > 0 && !lock.value && travel.scrolled == false) {
+                    travel.fired = true
+                    onDragBy(available.y)
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                val closing = travel.fired
+                travel.fired = false
+                travel.scrolled = null
+                if (closing) {
+                    onRelease(available.y)
+                    return available
+                }
+                return Velocity.Zero
+            }
+        }
+    }
+
+    Box(
+        modifier
+            .nestedScroll(connection)
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragStart = { tracker.resetTracking(); travel.fired = false; travel.distance = 0f },
+                    onDragEnd = {
+                        if (travel.fired) onRelease(tracker.calculateVelocity().y)
+                        travel.fired = false
+                    },
+                    onDragCancel = {
+                        if (travel.fired) onRelease(0f)
+                        travel.fired = false
+                    },
+                ) { change, amount ->
+                    // The finger's own path, not its place on a screen that
+                    // moves under it as the player closes.
+                    travel.distance += amount
+                    tracker.addPosition(change.uptimeMillis, Offset(0f, travel.distance))
+                    if (lock.value) return@detectVerticalDragGestures
+                    change.consume()
+                    travel.fired = true
+                    onDragBy(amount)
+                }
+            },
+    ) {
+        CompositionLocalProvider(LocalDismissLock provides lock) { content() }
+    }
+}
 
 private class Travel {
     var distance = 0f

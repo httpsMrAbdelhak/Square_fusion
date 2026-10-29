@@ -322,6 +322,9 @@ fun PlayerScreen(
     /** Read only inside the waveform, to keep position updates off the rest. */
     positionMs: State<Long>,
     onCollapse: () -> Unit,
+    /** Square Fusion: a drag down moves the player toward the bar by this many pixels; see DismissibleScreen. */
+    onCollapseDrag: ((Float) -> Unit)? = null,
+    onCollapseRelease: ((Float) -> Unit)? = null,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -1081,7 +1084,12 @@ fun PlayerScreen(
         }
 
         CompositionLocalProvider(LocalContentColor provides GlassInk) {
-            DismissibleScreen(onDismiss = onCollapse, modifier = Modifier.fillMaxSize()) {
+            DismissibleScreen(
+                onDismiss = onCollapse,
+                modifier = Modifier.fillMaxSize(),
+                onDragBy = onCollapseDrag,
+                onRelease = onCollapseRelease,
+            ) {
                 Column(
                     Modifier
                         .fillMaxSize()
