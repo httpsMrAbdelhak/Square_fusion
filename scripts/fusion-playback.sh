@@ -878,16 +878,43 @@ adb shell settings put global animator_duration_scale 5
 # The bar is where that title is, below the page.
 # Whatever song it is by now — an unplayable one is skipped — its title sits
 # just right of the bar's cover.
-mini="len(text) > 1 and 60 <= x1 <= 100 and y1 > $((screen_h * 3 / 4)) and y2 < $((screen_h - 70))"
+mini_at() {
+  # The bar's title: the text on the line of the bar's own Next button.
+  dump "$1"
+  python3 - "$OUT/$1.xml" <<'PY'
+import re, sys
+xml = open(sys.argv[1], encoding="utf-8").read()
+nodes = []
+for m in re.finditer(r'<node [^>]*>', xml):
+    n = m.group(0)
+    t = re.search(r'text="([^"]*)"', n).group(1)
+    d = re.search(r'content-desc="([^"]*)"', n).group(1)
+    x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n).groups())
+    nodes.append((t, d, x1, y1, x2, y2))
+nxt = [n for n in nodes if n[1] == "Next"]
+if nxt:
+    _, _, _, ny1, _, ny2 = nxt[-1]
+    for t, d, x1, y1, x2, y2 in nodes:
+        if t and x2 <= nxt[-1][2] and ny1 - 12 <= y1 <= ny2:
+            print((x1 + x2) // 2, (y1 + y2) // 2)
+            break
+PY
+}
+tap_mini() {
+  local b; b=$(mini_at "$1")
+  [ -n "$b" ] || return 1
+  echo "LOG tap $b ($1, the bar's title)"
+  adb shell input tap $b
+}
 adb shell screenrecord --time-limit 60 /sdcard/motion.mp4 > /dev/null 2>&1 &
 rec=$!
 sleep 2
-if tap_where motion-mini "$mini"; then
+if tap_mini motion-mini; then
   adb shell dumpsys gfxinfo "$PKG" reset > /dev/null 2>&1
   if wait_open; then echo "OK   the bar opens the player"; else
     echo "FAIL the player did not open from the bar"; fail=1
     dump motion-after-tap; shot motion-after-tap
-    echo "LOG tapped the first match of: $mini"
+    echo "LOG the bar as it was before the tap:"
     texts motion-mini | tail -n 14
     echo "LOG after the tap:"; texts motion-after-tap | tail -n 14
   fi
@@ -895,18 +922,18 @@ if tap_where motion-mini "$mini"; then
   if tap_where motion-close 'desc == "Close"'; then sleep 5
     player_open && { echo "FAIL the arrow did not close the player"; fail=1; } || echo "OK   the arrow closes the player into the bar"
   else echo "FAIL no arrow to close the player with"; fail=1; fi
-  tap_where motion-mini2 "$mini"; wait_open
+  tap_mini motion-mini2; wait_open
   # A drag down from the top of the player, released low: closes.
   adb shell input swipe 160 $((screen_h / 5)) 160 $((screen_h * 9 / 10)) 450; sleep 5
   player_open && { echo "FAIL a drag down did not close the player"; fail=1; } || echo "OK   a drag down closes the player"
-  tap_where motion-mini3 "$mini"; wait_open
+  tap_mini motion-mini3; wait_open
   # A short drag, let go: the player comes back up.
   adb shell input swipe 160 $((screen_h / 5)) 160 $((screen_h / 5 + 25)) 600; sleep 5
   player_open && echo "OK   a short drag lets the player settle back open" || { echo "FAIL a short drag closed the player"; fail=1; }
   tap_where motion-close2 'desc == "Close"'; sleep 2
   # Quickly, several times over.
   adb shell settings put global animator_duration_scale 1
-  for i in 1 2 3; do tap_where "motion-fast-open-$i" "$mini"; sleep 1; tap_where "motion-fast-close-$i" 'desc == "Close"'; sleep 1; done
+  for i in 1 2 3; do tap_mini "motion-fast-open-$i"; sleep 1; tap_where "motion-fast-close-$i" 'desc == "Close"'; sleep 1; done
   sleep 3
   player_open && { echo "FAIL the player was left open after quick opens and closes"; fail=1; } || echo "OK   quick opens and closes end in the bar"
   dump motion-end
