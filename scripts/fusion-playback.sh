@@ -849,7 +849,8 @@ sleep 6
 # Animations five times slower while recorded, so the trip shows on frames.
 adb shell settings put global animator_duration_scale 5
 open_home motion-home
-mini="clickable and y1 > $((screen_h * 3 / 4)) and y2 < $((screen_h - 40)) and x2 - x1 > 150"
+# The bar's title: a tap there is a tap on the bar, never on its buttons.
+mini="len(text) > 1 and x1 > 50 and y1 > $((screen_h * 3 / 4)) and y2 < $((screen_h - 70))"
 player_open() { adb shell uiautomator dump /sdcard/p.xml > /dev/null 2>&1; adb shell cat /sdcard/p.xml | grep -q 'content-desc="Close"'; }
 # Opened, then left to finish settling (animations run five times slower here).
 wait_open() { local i; for i in $(seq 1 20); do player_open && { sleep 6; return 0; }; sleep 1; done; return 1; }
