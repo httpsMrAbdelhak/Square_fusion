@@ -289,8 +289,7 @@ de BitChord. Avec un Canvas ou une vidéo en haut du lecteur, l'ancienne
 apparition en fondu est gardée (pas d'image à faire voyager).
 
 ### Pochettes
-- La source choisie dans Paramètres › Paroles et pochettes (« Pochettes
-  animées ») décide d'où viennent les images. Spotify (Canvas) : la pochette du
+- La source choisie dans Paramètres › Lecture › Pochettes décide d'où viennent les images. Spotify (Canvas) : la pochette du
   titre lui-même (YouTube Music ou Spotify), aucune image d'Apple Music, et le
   Canvas de Spotify pour les titres venus de Spotify, lu avec la connexion
   Spotify. Apple Music : la grande image, la pochette et la pochette animée
