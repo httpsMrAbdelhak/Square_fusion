@@ -841,19 +841,38 @@ fi
 
 # ── 9. Player open and close (BitChord's docking) ─────────────────────────────
 step "player motion"
-# A song with a cover in the bar: the imported Spotify playlist's, queued from
-# its Play button (it need not play for its cover to be the bar's).
-open_imported motion-list
-tap_where motion-play '(desc.lower() == "play" or text.lower() == "play") and clickable' || true
-sleep 6
-# Animations five times slower while recorded, so the trip shows on frames.
-adb shell settings put global animator_duration_scale 5
-open_home motion-home
-# The bar's title: a tap there is a tap on the bar, never on its buttons.
-mini="len(text) > 1 and x1 > 50 and y1 > $((screen_h * 3 / 4)) and y2 < $((screen_h - 70))"
 player_open() { adb shell uiautomator dump /sdcard/p.xml > /dev/null 2>&1; adb shell cat /sdcard/p.xml | grep -q 'content-desc="Close"'; }
 # Opened, then left to finish settling (animations run five times slower here).
 wait_open() { local i; for i in $(seq 1 20); do player_open && { sleep 6; return 0; }; sleep 1; done; return 1; }
+# A song of the Home page, played from there: it brings a cover to the bar.
+adb shell settings put global animator_duration_scale 1
+open_home motion-home
+dump motion-home
+song=$(python3 - "$OUT/motion-home.xml" "$screen_h" <<'PY'
+import re, sys, html
+xml = open(sys.argv[1], encoding="utf-8").read()
+h = int(sys.argv[2])
+for m in re.finditer(r'<node [^>]*>', xml):
+    n = m.group(0)
+    t = html.unescape(re.search(r'text="([^"]*)"', n).group(1))
+    x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n).groups())
+    if 80 <= x1 <= 100 and 200 < y1 and y2 < h * 3 // 4 and len(t) > 1:
+        print(f"{(x1 + x2) // 2} {(y1 + y2) // 2}\t{t}")
+        break
+PY
+)
+title="${song#*$'\t'}"
+if [ -n "$song" ]; then
+  adb shell input tap ${song%%$'\t'*}; sleep 8
+  echo "LOG song played from Home for the motion: $title"
+fi
+# Back on the page with the bar folded out.
+adb shell input keyevent KEYCODE_BACK; sleep 3
+open_home motion-home2
+# Animations five times slower while recorded, so the trip shows on frames.
+adb shell settings put global animator_duration_scale 5
+# The bar is where that title is, below the page.
+mini="text == \"${title//\"/}\" and y1 > $((screen_h * 3 / 4)) and y2 < $((screen_h - 70))"
 adb shell screenrecord --time-limit 60 /sdcard/motion.mp4 > /dev/null 2>&1 &
 rec=$!
 sleep 2
