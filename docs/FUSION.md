@@ -191,14 +191,20 @@ Samsung Glass, Pixel Glass). Certains lanceurs mettent un moment à afficher le
 changement ; un raccourci épinglé avec l'ancienne icône peut disparaître.
 
 ### Ajouter à une playlist
-Le menu d'un titre propose toutes les playlists où l'ajout est possible :
+Le menu d'un titre et le bouton « + » du lecteur proposent toutes les
+playlists où l'ajout est possible :
 - playlists YouTube Music du compte (créées par le compte, ou que YouTube
   marque modifiables) : le titre est envoyé à YouTube ;
 - playlists importées par lien (Spotify, Apple Music) et playlists Spotify
   synchronisées : le titre est ajouté dans Square Fusion uniquement, à la fin
   de la liste, et gardé après redémarrage. Rien n'est envoyé à Spotify ou à
   Apple Music, et une nouvelle synchronisation ne l'efface pas.
-Un titre déjà présent n'est pas ajouté une deuxième fois.
+Un titre déjà présent n'est pas ajouté une deuxième fois. Le titre est
+enregistré complet (titre, artistes, album, pochette, durée). Depuis le
+lecteur, seuls son adresse et son nom l'étaient : il s'affichait vide et ne se
+lisait pas. Ceux enregistrés ainsi sont complétés depuis YouTube Music à
+l'ouverture de la playlist ; un titre Spotify pas encore trouvé sur YouTube
+Music garde de quoi être cherché et lu.
 
 Cause de l'ancien comportement (seul « J'aime » proposé) : YouTube n'envoie
 plus l'icône « EDIT » dans le menu des playlists de la bibliothèque, seul
@@ -224,6 +230,58 @@ Sur Android 13 et plus, les commandes multimédias du système et le lecteur
 de l'écran de verrouillage affichent l'icône de l'application déclarée dans
 le manifeste, que l'application ne peut pas changer : elles gardent l'icône
 Square. Certains fabricants dessinent ces emplacements à leur façon.
+
+### Lire ensuite et appui long
+- Le menu d'un titre propose « Lire ensuite » : le titre est placé juste
+  après celui en cours, avant les titres déjà en file d'attente (« Ajouter à
+  la file d'attente » les place après eux). Avec la lecture aléatoire, il est
+  aussi joué juste après. La lecture en cours continue.
+- Un appui long sur un titre de l'accueil, de Nouveautés ou de Radio ouvre ce
+  même menu (Lire ensuite, file d'attente, ajout à une playlist,
+  téléchargement, artiste, album, radio, lien). La recherche et les
+  playlists l'avaient déjà.
+
+### Pays du contenu musical — Paramètres › Application
+Sous « Langue ». « Automatique » garde le comportement d'avant (pays du
+téléphone, ou du réseau). Un pays choisi est envoyé à YouTube Music comme
+région (`gl`) de toutes ses requêtes : accueil, Nouveautés, Radio,
+classements, recommandations, recherche. L'accueil, Nouveautés et Radio sont
+rechargés au changement, sans redémarrer ; le choix est gardé après
+redémarrage. La langue de l'application, celle du téléphone et le compte
+Google ne changent pas.
+
+Limites : seul YouTube Music accepte une région. Les playlists Spotify et
+Apple Music importées ne dépendent d'aucun pays. Si YouTube Music ne renvoie
+aucun contenu pour le pays choisi, l'application affiche celui des
+États-Unis (comportement déjà présent pour le pays du téléphone).
+YouTube décide lui-même de ce qu'il propose pour un pays ; Square Fusion ne
+filtre rien et ne bloque aucun titre.
+
+### Sections de l'accueil — Paramètres › Application › Apparence
+Chaque section que YouTube Music a envoyée sur l'accueil (sous son titre :
+« Sélection rapide », « Reprises et remixes »…) et « Écouter à nouveau »
+peuvent être masquées. Les titres de section viennent de YouTube et changent
+avec le compte, la langue et le pays : la liste montre ceux déjà reçus sur ce
+téléphone. Tout est affiché par défaut.
+
+### Accueil hors connexion
+Si l'accueil n'a pas pu être chargé, un bouton « Réessayer » le recharge. Au
+retour de la connexion, il est rechargé automatiquement s'il était vide ou en
+erreur ; un accueil déjà affiché n'est pas rechargé.
+
+### Réduction du lecteur
+Glisser vers le bas, depuis le haut du contenu, fait descendre le lecteur
+avec le doigt ; relâché, il se range dans le mini-lecteur ou revient, selon
+la vitesse et la distance. La flèche utilise la même animation.
+
+### Android 11
+Les menus des titres et des playlists et la fenêtre « Ajouter à une
+playlist » s'ouvrent sans le flou fait à la main (Android 11 n'a pas le flou
+du système) : fond assombri et panneau opaque aux couleurs de l'application.
+Le flou de ce fond, recalculé sur tout l'écran, retardait l'ouverture. Dans
+le lecteur, le fond derrière les paroles, la file d'attente et l'ajout à une
+playlist est flouté par le flou de secours de Liquid Glass (le flou de
+Compose ne fait rien avant Android 12). Android 12 et plus : inchangé.
 
 ### Performance — Paramètres › Application › Performance
 Désactivé par défaut (comportement de Square). « Choisir la fréquence » :
