@@ -739,6 +739,28 @@ fun SettingsScreen(
             }
         }
 
+        // Square Fusion: the sections of the Home page, each on or off.
+        if (shown == SettingsPage.App && "appearance" in openGroups) groupItem("home-sections", Group.APPEARANCE) {
+            val seen by dev.lelonio.square.fusion.HomeSections.seen.collectAsStateWithLifecycle()
+            val hidden by dev.lelonio.square.fusion.HomeSections.hidden.collectAsStateWithLifecycle()
+            val sections = seen + dev.lelonio.square.fusion.HomeSections.PLAY_AGAIN
+            Section(stringResource(R.string.fusion_home_sections)) {
+                sections.forEachIndexed { index, section ->
+                    if (index > 0) RowDivider()
+                    DownloadSwitch(
+                        label = if (section == dev.lelonio.square.fusion.HomeSections.PLAY_AGAIN) {
+                            stringResource(R.string.play_again)
+                        } else {
+                            section
+                        },
+                        checked = section !in hidden,
+                        backdrop = backdrop,
+                        onChange = { dev.lelonio.square.fusion.HomeSections.setShown(section, it) },
+                    )
+                }
+            }
+        }
+
         // The two settings that are Android's rather than the app's, and the
         // two people are sent to when the music stops in the background or a
         // notification never arrives.

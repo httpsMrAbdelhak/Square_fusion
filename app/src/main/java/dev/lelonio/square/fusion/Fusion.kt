@@ -25,6 +25,7 @@ object Fusion {
         settings = FusionSettings(appContext)
         runCatching { ProfilePhoto.init(appContext) }
         runCatching { PlaylistCustomizations.init(appContext) }
+        runCatching { HomeSections.init(appContext) }
             .onFailure { FusionLog.w("playlist customizations unavailable: ${it.message}") }
         runCatching {
             dev.lelonio.square.fusion.spotify.SpotifyFreeAccount.init(appContext)

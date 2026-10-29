@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.lazy.LazyRow
@@ -1309,6 +1310,7 @@ private fun YouTubeHome(
     }
 
     val listState = rememberLazyListState()
+    val hiddenSections by dev.lelonio.square.fusion.HomeSections.hidden.collectAsState()
     // The same collapse the Spotify page has, read the same way; see the note
     // there. The header is a sibling of the list rather than its first item
     // precisely so it can shrink while the list scrolls under it.
@@ -1380,7 +1382,8 @@ private fun YouTubeHome(
         // Whatever shelves YouTube sent, in its own order and under its own
         // titles. Not reshaped into a fixed set of rows: the page is different
         // signed in and signed out, and it changes on its own besides.
-        home.rows.forEachIndexed { index, row ->
+        // Square Fusion: less those switched off in the settings.
+        home.rows.filterNot { it.title.trim() in hiddenSections }.forEachIndexed { index, row ->
             item(key = "head-$index-${row.title}") { Heading(row.title, row.strapline) }
 
             if (row.tracks.isNotEmpty()) {
@@ -1435,7 +1438,7 @@ private fun YouTubeHome(
 
         // Last: the rows above change on their own, this one only changes
         // because the user did something.
-        if (recent.isNotEmpty()) {
+        if (recent.isNotEmpty() && dev.lelonio.square.fusion.HomeSections.PLAY_AGAIN !in hiddenSections) {
             item(key = "recent-head") { Heading(stringResource(R.string.play_again)) }
             item(key = "recent") {
                 LazyRow(

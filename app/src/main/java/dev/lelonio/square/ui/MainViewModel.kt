@@ -650,6 +650,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     emptyList()
                 }
                 val rows = if (replace) newEpisodes + feed.rows else before.rows + feed.rows
+                // Square Fusion: the Home page's own shelves, for the settings
+                // that switch them off; not a chip's page.
+                if (youtubeParams == null) dev.lelonio.square.fusion.HomeSections.saw(feed.rows.map { it.title })
                 _youtubeHome.value = before.copy(
                     rows = rows,
                     // A continuation carries no chips, so the ones already on

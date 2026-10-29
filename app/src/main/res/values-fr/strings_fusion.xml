@@ -45,4 +45,5 @@
     <string name="playing_next">Lu ensuite : %s</string>
     <string name="fusion_content_country">Pays du contenu musical</string>
     <string name="fusion_content_country_auto">Automatique</string>
+    <string name="fusion_home_sections">Sections de l\'accueil</string>
 </resources>
