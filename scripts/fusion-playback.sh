@@ -887,10 +887,13 @@ xml = open(sys.argv[1], encoding="utf-8").read()
 nodes = []
 for m in re.finditer(r'<node [^>]*>', xml):
     n = m.group(0)
-    t = re.search(r'text="([^"]*)"', n).group(1)
-    d = re.search(r'content-desc="([^"]*)"', n).group(1)
-    x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n).groups())
-    nodes.append((t, d, x1, y1, x2, y2))
+    t = re.search(r'text="([^"]*)"', n)
+    d = re.search(r'content-desc="([^"]*)"', n)
+    b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n)
+    if not (t and d and b):
+        continue
+    x1, y1, x2, y2 = map(int, b.groups())
+    nodes.append((t.group(1), d.group(1), x1, y1, x2, y2))
 nxt = [n for n in nodes if n[1] == "Next"]
 if nxt:
     _, _, _, ny1, _, ny2 = nxt[-1]
@@ -943,7 +946,7 @@ if tap_mini motion-mini; then
   adb pull /sdcard/motion.mp4 "$OUT/motion.mp4" > /dev/null 2>&1 && echo "LOG screen recording of the motion: motion.mp4"
   adb shell settings put global animator_duration_scale 1
 else
-  echo "WARN no now-playing bar to open the player from"; texts motion-home | tail -n 10
+  echo "FAIL no now-playing bar to open the player from"; fail=1; texts motion-mini | tail -n 10
   adb shell settings put global animator_duration_scale 1
 fi
 
@@ -978,6 +981,9 @@ for code in DZ FR; do
     tap_where "region-pick-$code" "text == \"$name\"" && sleep 2
     open_home "region-home-$code"
     tap_where "region-new-$code" '(text == "New" or desc == "New") and y1 > 400' && sleep 12
+    # Down to the charts, under YouTube's new releases (the same everywhere).
+    for i in 1 2 3 4; do adb shell input swipe 160 $((screen_h * 3 / 4)) 160 $((screen_h / 5)) 300; sleep 1; done
+    sleep 2
     dump "region-new-$code"
     adb logcat -d -s 'SquareFusion:*' 'SquareYouTube:*' | grep -E "youtube region|browsing as" | tail -n 3 | sed "s/^/LOG $code: /"
     python3 - "$OUT/region-new-$code.xml" <<'PY' | head -n 6 | sed "s/^/LOG $code New tab: /"

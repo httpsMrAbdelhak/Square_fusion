@@ -325,6 +325,8 @@ class InnerTube {
         params: String? = null,
         continuation: String? = null,
         setLogin: Boolean = false,
+        /** Square Fusion: see BrowseBody.formData. */
+        selectedValues: List<String>? = null,
     ) = withRetry {
         httpClient.post("browse") {
             ytClient(client, setLogin = setLogin || useLoginForBrowse)
@@ -337,7 +339,8 @@ class InnerTube {
                     ),
                     browseId = browseId,
                     params = params,
-                    continuation = continuation
+                    continuation = continuation,
+                    formData = selectedValues?.let { com.metrolist.innertube.models.body.FormData(it) },
                 )
             )
         }

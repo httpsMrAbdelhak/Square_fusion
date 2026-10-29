@@ -2018,7 +2018,8 @@ object YouTube {
             )
         }
 
-    suspend fun getChartsPage(continuation: String? = null): Result<ChartsPage> =
+    /** Square Fusion: [country] picks the charts' country, as the page's own country menu does. */
+    suspend fun getChartsPage(continuation: String? = null, country: String? = null): Result<ChartsPage> =
         runCatching {
             val response =
                 innerTube
@@ -2027,6 +2028,7 @@ object YouTube {
                         browseId = "FEmusic_charts",
                         params = "ggMGCgQIgAQ%3D",
                         continuation = continuation,
+                        selectedValues = country?.takeIf { continuation == null }?.let { listOf(it) },
                     ).body<BrowseResponse>()
 
             val sections = mutableListOf<ChartsPage.ChartSection>()

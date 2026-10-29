@@ -345,7 +345,10 @@ class YouTubeBackend(private val account: YouTubeAccount) : MusicBackend {
                     .mapNotNull { section -> section.title?.let { rowOf(it, section.items) } }
             }
             val charts = async {
-                runCatching { YouTube.getChartsPage().getOrThrow() }
+                // Square Fusion: the charts of the content country, named in
+                // the request as the page's own country menu names it; the
+                // region alone left them on wherever YouTube placed the visitor.
+                runCatching { YouTube.getChartsPage(country = YouTube.locale.gl.uppercase().takeIf { it.length == 2 }).getOrThrow() }
                     .onFailure { android.util.Log.w(LOG_TAG, "charts unavailable: $it") }
                     .getOrNull()
                     ?.sections.orEmpty()
