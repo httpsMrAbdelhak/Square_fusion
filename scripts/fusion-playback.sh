@@ -787,8 +787,9 @@ if open_settings_app country && tap_where country-group 'text == "Music content 
   adb shell input keyevent KEYCODE_MOVE_END
   for i in $(seq 1 12); do adb shell input keyevent KEYCODE_DEL; done
   adb shell input keyevent KEYCODE_BACK; sleep 1
-  tap_where country-auto 'text == "Automatic" and y1 > 200' && sleep 3
-  if adb logcat -d -s 'SquareFusion:*' | grep -q "chosen: automatic"; then echo "OK   back to Automatic"; else echo "FAIL Automatic was not applied"; fail=1; fi
+  tap_where country-auto 'text == "Automatic"' || { adb shell input swipe 160 $((screen_h / 3)) 160 $((screen_h * 3 / 4)) 300; sleep 2; tap_where country-auto2 'text == "Automatic"'; }
+  sleep 3
+  if adb logcat -d -s 'SquareFusion:*' | grep -q "chosen: automatic"; then echo "OK   back to Automatic"; else echo "FAIL Automatic was not applied"; fail=1; texts country-auto | head -n 25; fi
   adb shell am force-stop "$PKG"; sleep 2
   adb logcat -c
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1; sleep 6
