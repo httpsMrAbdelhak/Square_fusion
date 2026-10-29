@@ -867,6 +867,9 @@ if [ -n "$song" ]; then
   adb shell input tap ${song%%$'\t'*}; sleep 8
   echo "LOG song played from Home for the motion: $title"
 fi
+# Paused, so the bar holds still: here every stream is refused and the
+# queue would otherwise skip from song to song under the finger.
+adb shell input keyevent KEYCODE_MEDIA_PAUSE; sleep 3
 # Back on the page with the bar folded out.
 adb shell input keyevent KEYCODE_BACK; sleep 3
 open_home motion-home2
