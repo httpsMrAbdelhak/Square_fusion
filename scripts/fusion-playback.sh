@@ -480,9 +480,14 @@ PY
   echo "OK   Add to a playlist lists the imported playlists, not only Liked"
   tap_where add-target 'text.startswith("Today") and text.endswith("s Hits")'; sleep 4
   adb shell am force-stop "$PKG"; sleep 2
+  # Its page through the import of the same link, which opens the stored playlist.
   to_library add-lib
-  if ! tap_where add-open 'text.startswith("Today") and text.endswith("s Hits")'; then echo "WARN the Apple Music playlist is not on the Library's first screen"; return; fi
-  sleep 8
+  tap_where add-plus 'desc == "New playlist"' && sleep 3 \
+    && tap_where add-menu 'text == "Import a playlist"' && sleep 3 \
+    && { tap_where add-field '"EditText" in cls' || true; } \
+    && adb shell input text "'$APPLE'" && sleep 1 \
+    && tap_where add-import 'text == "Import"' && sleep 15 \
+    || { echo "WARN could not reopen the Apple Music playlist"; return; }
   local i
   for i in $(seq 1 14); do
     dump add-check
