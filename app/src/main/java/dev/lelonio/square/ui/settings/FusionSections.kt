@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -293,5 +294,55 @@ internal fun PerformanceSection(backdrop: dev.lelonio.square.ui.glass.backdrop.B
             Note(stringResource(R.string.fusion_rate_not_confirmed, chosen))
         }
         Note(stringResource(R.string.fusion_performance_note))
+    }
+}
+
+/** Square Fusion: a country's name in the language the app is read in, from its ISO 3166 code. */
+internal fun countryName(code: String): String =
+    java.util.Locale("", code).getDisplayCountry(java.util.Locale.getDefault()).ifBlank { code }
+
+/**
+ * Square Fusion: the country the music is chosen for; see LanguageStore.country.
+ * Automatic first, then every country by name, with a search above them.
+ */
+@Composable
+internal fun ContentCountryPicker() {
+    val context = LocalContext.current
+    val store = remember(context) { (context.applicationContext as dev.lelonio.square.SquareApplication).language }
+    val chosen by store.country.collectAsStateWithLifecycle()
+    var query by remember { mutableStateOf("") }
+    val countries = remember(java.util.Locale.getDefault()) {
+        java.util.Locale.getISOCountries().map { it to countryName(it) }.sortedBy { it.second.lowercase() }
+    }
+    val shown = remember(query, countries) {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) countries else countries.filter { (code, name) -> name.lowercase().contains(q) || code.lowercase() == q }
+    }
+    Section(stringResource(R.string.fusion_content_country)) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = { Text(stringResource(R.string.search)) },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+        )
+        androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 380.dp)) {
+            if (query.isBlank()) {
+                item("auto") {
+                    ChoiceRow(
+                        label = stringResource(R.string.fusion_content_country_auto),
+                        selected = chosen.isEmpty(),
+                    ) { store.setCountry("") }
+                }
+            }
+            items(shown.size, key = { shown[it].first }) { index ->
+                val (code, name) = shown[index]
+                if (index > 0 || query.isBlank()) RowDivider()
+                ChoiceRow(label = name, selected = code == chosen) { store.setCountry(code) }
+            }
+        }
     }
 }

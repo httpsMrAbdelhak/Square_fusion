@@ -32,6 +32,25 @@ class LanguageStore(context: Context) {
     /** The chosen tag, or empty for the system's. */
     val tag: StateFlow<String> = _tag.asStateFlow()
 
+    private val _country = MutableStateFlow(prefs.getString(KEY_COUNTRY, null).orEmpty())
+
+    /**
+     * Square Fusion: the country the music is chosen for, as an ISO 3166 code,
+     * or empty for the phone's own. Only what YouTube Music is asked for
+     * changes: not the app's language, not the phone, not the Google account.
+     */
+    val country: StateFlow<String> = _country.asStateFlow()
+
+    fun setCountry(code: String) {
+        val clean = code.uppercase().takeIf { it.length == 2 }.orEmpty()
+        if (clean == _country.value) return
+        _country.value = clean
+        prefs.edit().putString(KEY_COUNTRY, clean).apply()
+        applyToYouTube()
+        dev.lelonio.square.backend.youtube.YouTubeBackend.regionChanged()
+        _countryChanges.value++
+    }
+
     /**
      * The two-letter language actually in force, which is what the engine wants.
      *
@@ -91,7 +110,8 @@ class LanguageStore(context: Context) {
      * app is read in; the network's where the phone names none.
      */
     fun applyToYouTube() {
-        val country = systemLocale().country.takeIf { it.length == 2 }
+        val country = _country.value.takeIf { it.length == 2 }
+            ?: systemLocale().country.takeIf { it.length == 2 }
             ?: app.getSystemService(android.telephony.TelephonyManager::class.java)
                 ?.networkCountryIso?.uppercase()?.takeIf { it.length == 2 }
             ?: "US"
@@ -126,9 +146,15 @@ class LanguageStore(context: Context) {
             android.content.res.Resources.getSystem().configuration.locale
         }
 
-    private companion object {
+    companion object {
+        private val _countryChanges = MutableStateFlow(0)
+
+        /** Bumped each time another country is chosen, for the pages read for the old one. */
+        val countryChanges: StateFlow<Int> = _countryChanges.asStateFlow()
+
         const val FILE_NAME = "square_language"
         const val KEY_LANGUAGE = "language"
+        const val KEY_COUNTRY = "content_country"
     }
 }
 

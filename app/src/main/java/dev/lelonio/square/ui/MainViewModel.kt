@@ -857,6 +857,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var devicesJob: Job? = null
 
     init {
+        // Square Fusion: the pages read for the content country chosen before
+        // are read again for the new one; the songs, playlists and Library stay.
+        viewModelScope.launch {
+            dev.lelonio.square.data.LanguageStore.countryChanges.drop(1).collect {
+                sourceNewJob?.cancel()
+                sourceRadioJob?.cancel()
+                _sourceNew.value = SourceRowsState()
+                _sourceRadio.value = SourceRowsState()
+                youtubeHomeJob?.cancel()
+                loadYouTubeHome(force = true)
+            }
+        }
+    }
+
+    init {
         followKeptYouTube()
         // A video in an open list, put right as its song is found; see
         // YouTubeBackend.asSongs, which opens the list without waiting for all.

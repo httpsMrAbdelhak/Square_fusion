@@ -61,6 +61,7 @@ import com.adamglin.phosphoricons.regular.ShieldCheck
 import com.adamglin.phosphoricons.regular.GearSix
 import com.adamglin.phosphoricons.regular.Palette
 import com.adamglin.phosphoricons.regular.Translate
+import com.adamglin.phosphoricons.regular.GlobeHemisphereWest
 import dev.lelonio.square.ui.glass.backdrop.Backdrop
 import dev.lelonio.square.BuildConfig
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -670,6 +671,25 @@ fun SettingsScreen(
         }
 
         if (shown == SettingsPage.App && "language" in openGroups) groupEnd(Group.LANGUAGE)
+
+        // Square Fusion: the country the music is chosen for, under the
+        // language it is read in; see LanguageStore.country.
+        if (shown == SettingsPage.App) groupHeading(
+            Group.COUNTRY,
+            open = "country" in openGroups,
+            // The country in force, where the others say what is inside.
+            summary = {
+                val store = remember(context) { (context.applicationContext as dev.lelonio.square.SquareApplication).language }
+                val code by store.country.collectAsStateWithLifecycle()
+                if (code.isEmpty()) stringResource(R.string.fusion_content_country_auto) else countryName(code)
+            },
+        ) { toggleGroup("country") }
+
+        if (shown == SettingsPage.App && "country" in openGroups) groupItem("country", Group.COUNTRY) {
+            ContentCountryPicker()
+        }
+
+        if (shown == SettingsPage.App && "country" in openGroups) groupEnd(Group.COUNTRY)
 
         if (shown == SettingsPage.App) groupHeading(Group.APPEARANCE, open = "appearance" in openGroups) { toggleGroup("appearance") }
 
@@ -2128,6 +2148,7 @@ private enum class Group(@StringRes val title: Int, @StringRes val summary: Int,
     DOWNLOADS(R.string.downloads, R.string.settings_group_downloads_summary, PhosphorIcons.Regular.DownloadSimple),
     CLEANUP(R.string.storage_cleanup, R.string.settings_group_cleanup_summary, PhosphorIcons.Regular.Broom),
     LANGUAGE(R.string.language, R.string.settings_group_language_summary, PhosphorIcons.Regular.Translate),
+    COUNTRY(R.string.fusion_content_country, R.string.fusion_content_country_auto, PhosphorIcons.Regular.GlobeHemisphereWest),
     APPEARANCE(R.string.settings_group_appearance, R.string.settings_group_appearance_summary, PhosphorIcons.Regular.Palette),
     SYSTEM(R.string.page_app_system, R.string.settings_group_system_summary, PhosphorIcons.Regular.GearSix),
     ABOUT(R.string.about, R.string.settings_group_about_summary, PhosphorIcons.Regular.Info),
@@ -2150,7 +2171,13 @@ private val LocalGroupTitle = androidx.compose.runtime.compositionLocalOf<String
  * The heading says what is inside, so a folded group still says what opening
  * it will show.
  */
-private fun LazyListScope.groupHeading(group: Group, open: Boolean, onToggle: () -> Unit) =
+private fun LazyListScope.groupHeading(
+    group: Group,
+    open: Boolean,
+    /** Square Fusion: a line of its own instead of the group's, for one that shows a value. */
+    summary: (@Composable () -> String)? = null,
+    onToggle: () -> Unit,
+) =
     item("group-${group.name}") {
         val turn by androidx.compose.animation.core.animateFloatAsState(
             if (open) 180f else 0f,
@@ -2189,7 +2216,7 @@ private fun LazyListScope.groupHeading(group: Group, open: Boolean, onToggle: ()
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    stringResource(group.summary),
+                    summary?.invoke() ?: stringResource(group.summary),
                     style = MaterialTheme.typography.bodySmall,
                     color = InkDim,
                     maxLines = 2,

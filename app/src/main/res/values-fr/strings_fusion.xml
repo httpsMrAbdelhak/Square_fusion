@@ -43,4 +43,6 @@
     <string name="fusion_greeting_evening_name">Bonsoir, %1$s</string>
     <string name="fusion_quality_line">%1$s · %2$d kbps</string>
     <string name="playing_next">Lu ensuite : %s</string>
+    <string name="fusion_content_country">Pays du contenu musical</string>
+    <string name="fusion_content_country_auto">Automatique</string>
 </resources>

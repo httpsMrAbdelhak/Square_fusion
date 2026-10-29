@@ -1031,6 +1031,11 @@ class YouTubeBackend(private val account: YouTubeAccount) : MusicBackend {
         @Volatile
         private var openRegion = false
 
+        /** Square Fusion: another content country was chosen; it is asked first again. */
+        fun regionChanged() {
+            openRegion = false
+        }
+
         /** The `list=` id of a playlist URL. */
         private fun playlistIdOf(url: String?): String? =
             runCatching { android.net.Uri.parse(url ?: return null) }
