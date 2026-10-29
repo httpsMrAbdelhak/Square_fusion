@@ -31,9 +31,10 @@ class SkipFadePlayer(
 
     override fun addMediaItems(mediaItems: MutableList<MediaItem>) {
         val queued = mediaItems.isNotEmpty() && mediaItems.all(::isQueued)
-        val at = if (queued) queueEnd() else mediaItemCount
+        val first = queued && mediaItems.all(::isFirst)
+        val at = if (first) nextIndex() else if (queued) queueEnd() else mediaItemCount
         super.addMediaItems(at, mediaItems)
-        if (queued) playNextInShuffle(at, mediaItems.size)
+        if (queued) playNextInShuffle(at, mediaItems.size, first)
     }
 
     override fun addMediaItem(index: Int, mediaItem: MediaItem) = addMediaItems(index, mutableListOf(mediaItem))
@@ -41,9 +42,10 @@ class SkipFadePlayer(
     override fun addMediaItems(index: Int, mediaItems: MutableList<MediaItem>) {
         // The controller asks for the end; the queue knows better where that is.
         val queued = mediaItems.isNotEmpty() && mediaItems.all(::isQueued)
-        val at = if (queued) queueEnd() else index
+        val first = queued && mediaItems.all(::isFirst)
+        val at = if (first) nextIndex() else if (queued) queueEnd() else index
         super.addMediaItems(at, mediaItems)
-        if (queued) playNextInShuffle(at, mediaItems.size)
+        if (queued) playNextInShuffle(at, mediaItems.size, first)
     }
 
     /**
@@ -55,7 +57,7 @@ class SkipFadePlayer(
      * The order is rewritten with them right after the song playing and after
      * anything queued before them, and everything else as it was.
      */
-    private fun playNextInShuffle(at: Int, count: Int) {
+    private fun playNextInShuffle(at: Int, count: Int, first: Boolean = false) {
         val exo = wrappedPlayer as? androidx.media3.exoplayer.ExoPlayer ?: return
         if (!shuffleModeEnabled || count <= 0) return
         val timeline = currentTimeline
@@ -69,7 +71,8 @@ class SkipFadePlayer(
         }
         order.removeAll(added)
         var place = order.indexOf(currentMediaItemIndex) + 1
-        while (place in order.indices && isQueued(getMediaItemAt(order[place]))) place++
+        // Square Fusion: "Play next" goes ahead of the songs queued before it.
+        if (!first) while (place in order.indices && isQueued(getMediaItemAt(order[place]))) place++
         order.addAll(place.coerceIn(0, order.size), (at until at + count).toList())
         exo.setShuffleOrder(
             androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder(order.toIntArray(), System.nanoTime()),
@@ -78,6 +81,12 @@ class SkipFadePlayer(
 
     private fun isQueued(item: MediaItem) =
         item.mediaMetadata.extras?.getBoolean(dev.lelonio.square.ui.EXTRA_PLAY_NEXT) == true
+
+    private fun isFirst(item: MediaItem) =
+        item.mediaMetadata.extras?.getBoolean(dev.lelonio.square.ui.EXTRA_PLAY_FIRST) == true
+
+    /** Square Fusion: straight after the song playing. */
+    private fun nextIndex() = if (mediaItemCount == 0) 0 else currentMediaItemIndex + 1
 
     /** Just past the run of queued songs that follows the one playing. */
     private fun queueEnd(): Int {

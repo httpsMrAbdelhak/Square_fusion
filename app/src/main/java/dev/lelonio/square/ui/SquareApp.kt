@@ -140,6 +140,7 @@ import com.adamglin.phosphoricons.regular.PencilSimple
 import com.adamglin.phosphoricons.regular.PushPin
 import com.adamglin.phosphoricons.regular.Plus
 import com.adamglin.phosphoricons.regular.Queue
+import com.adamglin.phosphoricons.regular.ArrowBendDownRight
 import com.adamglin.phosphoricons.regular.SpotifyLogo
 import com.adamglin.phosphoricons.regular.YoutubeLogo
 import com.adamglin.phosphoricons.regular.Export
@@ -410,6 +411,8 @@ fun SquareApp(
     onPlay: (List<CatalogTrack>, Int, String?, Boolean, String, Long) -> Unit,
     /** Appends one track to the end of the queue; see the swipe gesture on rows. */
     onEnqueue: (CatalogTrack) -> Unit,
+    /** Square Fusion: straight after the song playing; see MainActivity.playNext. */
+    onPlayNext: (CatalogTrack) -> Unit = onEnqueue,
     /** Appends multiple tracks to the end of the queue; used by Autoplay. */
     onEnqueueAll: (List<CatalogTrack>) -> Unit = {},
     /**
@@ -1644,6 +1647,13 @@ fun SquareApp(
                                 }
                             },
                     ) {
+                    // Square Fusion: a long press on a song of the Home, New and
+                    // Radio pages opens the same song menu as the other lists.
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        dev.lelonio.square.ui.home.LocalTrackMenu provides { track ->
+                            trackMenu = TrackMenuRequest(track = track, removable = false)
+                        },
+                    ) {
                     NavHost(
                         navController,
                         startDestination = Routes.HOME,
@@ -2211,6 +2221,7 @@ fun SquareApp(
                             }
                         }
 
+                    }
                     }
                 }
 
@@ -3736,6 +3747,10 @@ fun SquareApp(
                         TrackSheetAction(stringResource(R.string.play), PhosphorIcons.Fill.Play) {
                             trackMenu = null
                             onPlay(listOf(menu.track), 0, null, false, "", 0L)
+                        }
+                        TrackSheetAction(stringResource(R.string.queue_play_next), PhosphorIcons.Regular.ArrowBendDownRight) {
+                            trackMenu = null
+                            onPlayNext(menu.track)
                         }
                         TrackSheetAction(stringResource(R.string.add_to_queue), PhosphorIcons.Regular.Queue) {
                             trackMenu = null

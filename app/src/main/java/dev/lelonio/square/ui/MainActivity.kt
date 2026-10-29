@@ -106,6 +106,7 @@ class MainActivity : ComponentActivity() {
                     player = controller,
                     onPlay = ::play,
                     onEnqueue = ::enqueue,
+                    onPlayNext = ::playNext,
                     onEnqueueAll = ::enqueueAll,
                     openPlayer = openPlayer,
                     link = link,
@@ -416,6 +417,25 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * Square Fusion: [track] straight after the song playing, ahead of the songs
+     * already queued; the song playing carries on. Starts playback when nothing
+     * is loaded, as [enqueue] does.
+     */
+    private fun playNext(track: CatalogTrack) {
+        val player = controller ?: return
+        if (player.mediaItemCount == 0) {
+            enqueue(track)
+            return
+        }
+        player.addMediaItem(player.currentMediaItemIndex + 1, toMediaItem(track, playNext = true, playFirst = true))
+        android.widget.Toast.makeText(
+            this,
+            getString(dev.lelonio.square.R.string.playing_next, track.name),
+            android.widget.Toast.LENGTH_SHORT,
+        ).show()
+    }
+
+    /**
      * Appends multiple tracks to the end of the queue (used for continuous Autoplay).
      */
     private fun enqueueAll(tracks: List<CatalogTrack>) {
@@ -436,6 +456,8 @@ class MainActivity : ComponentActivity() {
         asContext: Boolean = false,
         contextLabel: String = "",
         playNext: Boolean = false,
+        /** Square Fusion: ahead of the songs already queued; see [playNext]. */
+        playFirst: Boolean = false,
     ): MediaItem =
         MediaItem.Builder()
             // The media id carries the track's URI; PlayQueue refuses anything else.
@@ -502,6 +524,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             if (playNext) putBoolean(EXTRA_PLAY_NEXT, true)
+                            if (playFirst) putBoolean(EXTRA_PLAY_FIRST, true)
                         },
                     )
                     .build(),
@@ -530,6 +553,9 @@ const val EXTRA_CONTEXT_ORDERED = "dev.lelonio.square.CONTEXT_ORDERED"
  * the end of the queue.
  */
 const val EXTRA_PLAY_NEXT = "dev.lelonio.square.PLAY_NEXT"
+
+/** Square Fusion: a queued song that goes straight after the one playing; see MainActivity.playNext. */
+const val EXTRA_PLAY_FIRST = "dev.lelonio.square.PLAY_FIRST"
 
 /** What to show the listener: "Playlist · Estate 2025", "Ricerca". */
 const val EXTRA_CONTEXT_LABEL = "dev.lelonio.square.CONTEXT_LABEL"

@@ -956,12 +956,13 @@ private fun PlaylistTile(playlist: CatalogPlaylist, onClick: () -> Unit) {
 
 @Composable
 private fun TrackTile(track: CatalogTrack, onClick: () -> Unit) {
+    val onMenu = LocalTrackMenu.current
     Column(
         // No clip on the column: it would cut off the artwork's drop shadow,
         // which spreads wider than the tile itself.
         Modifier
             .width(128.dp)
-            .pressable(onClick),
+            .pressable(onClick, onLongClick = onMenu?.let { { it(track) } }),
     ) {
         Artwork(
             url = track.artworkUrl,
@@ -1165,13 +1166,20 @@ private fun QuickPicks(tracks: List<CatalogTrack>, onPlay: (Int) -> Unit) {
     }
 }
 
+/**
+ * Square Fusion: what a long press on a song of these pages opens, the same
+ * song menu as everywhere else; null leaves the songs to a tap alone.
+ */
+val LocalTrackMenu = androidx.compose.runtime.staticCompositionLocalOf<((CatalogTrack) -> Unit)?> { null }
+
 @Composable
 private fun QuickPickRow(track: CatalogTrack, onClick: () -> Unit) {
+    val onMenu = LocalTrackMenu.current
     Row(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .pressable(onClick)
+            .pressable(onClick, onLongClick = onMenu?.let { { it(track) } })
             .padding(vertical = 6.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
