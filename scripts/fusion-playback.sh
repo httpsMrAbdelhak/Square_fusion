@@ -69,6 +69,7 @@ PY
 )
   [ -n "$b" ] || return 1
   echo "   tap $b ($1)"
+  case "$1" in motion*) echo "LOG tap $b ($1)" ;; esac
   adb shell input tap $b
 }
 
@@ -872,7 +873,9 @@ open_home motion-home2
 # Animations five times slower while recorded, so the trip shows on frames.
 adb shell settings put global animator_duration_scale 5
 # The bar is where that title is, below the page.
-mini="text == \"${title//\"/}\" and y1 > $((screen_h * 3 / 4)) and y2 < $((screen_h - 70))"
+# Whatever song it is by now — an unplayable one is skipped — its title sits
+# just right of the bar's cover.
+mini="len(text) > 1 and 60 <= x1 <= 100 and y1 > $((screen_h * 3 / 4)) and y2 < $((screen_h - 70))"
 adb shell screenrecord --time-limit 60 /sdcard/motion.mp4 > /dev/null 2>&1 &
 rec=$!
 sleep 2
