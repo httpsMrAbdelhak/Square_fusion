@@ -1,7 +1,7 @@
 ## Nouveautés
 
 - **Recadrage des images** : la pochette d'une playlist et la photo de profil se recadrent avant d'être enregistrées (déplacer, zoomer, aperçu, valider ou annuler).
-- **Ajouter à une playlist** propose de nouveau toutes vos playlists : celles de YouTube Music que vous pouvez modifier, les playlists importées par lien et les playlists Spotify synchronisées. Pour les playlists importées ou Spotify, le titre est ajouté dans Square Fusion uniquement, sans envoi à Spotify.
+- **Ajouter à une playlist** propose de nouveau toutes vos playlists, même sans compte YouTube connecté : celles de YouTube Music que vous pouvez modifier, les playlists importées par lien et les playlists Spotify synchronisées. Pour les playlists importées ou Spotify, le titre est ajouté dans Square Fusion uniquement, sans envoi à Spotify.
 - **Notification de lecture** : sa petite icône suit l'icône d'application choisie, dès le changement d'icône.
 - **Qualité audio** : l'indicateur sous la barre de lecture est présenté dans une pastille Liquid Glass.
 

@@ -97,6 +97,28 @@ titres dans l'ordre, vidéos ignorées, page vide → indisponible) et de ses li
 | Unitaires : heures de la salutation, codecs de la ligne de qualité, durées Spotify (`trackDuration`) | OK |
 
 
+### Ajouts « recadrage, ajout aux playlists, icône de notification, notes de version »
+| Étape | Résultat |
+|---|---|
+| Menu d'une playlist importée : ni « Retirer de la bibliothèque » ni YTDLnis ; « Supprimer » présent | OK |
+| Menu d'un titre : pas de YTDLnis | OK |
+| Fenêtre de modification : plus de « Changer la pochette » | OK |
+| Titre « Bibliothèque » et salutation : une seule ligne, dans l'écran (320 px de large) | OK |
+| Titre › Ajouter à une playlist, sans compte : playlists importées Spotify et Apple Music proposées | OK |
+| Titre ajouté à la playlist Apple Music, retrouvé dans celle-ci après arrêt de l'application | OK |
+| À propos : « Développé par » Lelonio, github.com/Lelonio ; pas de Ko-fi | OK |
+| Menus sur Android 11 : ouverture en ~1,6 s sur l'émulateur, 0 recalcul du flou menu ouvert | OK |
+| Recadrage (test instrumenté), carré et cercle : image carrée, gauche et droite d'une image 2:1 conservées sans étirement ; annuler ne renvoie rien | OK |
+| Icône de notification (test instrumenté) : pour les 14 icônes, l'icône choisie est appliquée, le changement est annoncé, l'icône de notification se charge | OK |
+| Notes de version (`scripts/release-notes.sh`, testé localement) : fichier modifié depuis la version précédente → ce fichier ; inchangé → commits depuis la version précédente ; aucun commit → « Nouvelle compilation… » ; version précédente inconnue → le fichier | OK |
+
+Non vérifiable ici : la pastille de qualité pendant une vraie lecture
+(YouTube refuse la lecture sur l'émulateur de GitHub), l'icône réellement
+dessinée par la barre d'état et l'écran de verrouillage d'un téléphone, le
+geste de recadrage au doigt (le test valide le cadrage de départ), la
+fenêtre de mise à jour sur votre téléphone avec les nouvelles notes.
+
+## 4. À vérifier sur votre téléphone
 - Lecture réelle d'un titre Spotify via YouTube Music, suivant / précédent /
   aléatoire / répétition dans une playlist importée.
 - Qualité : changement de niveau entendu, « Dernier flux » affiché ; ~256 kbps
