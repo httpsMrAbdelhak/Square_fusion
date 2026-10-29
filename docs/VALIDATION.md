@@ -118,6 +118,24 @@ dessinée par la barre d'état et l'écran de verrouillage d'un téléphone, le
 geste de recadrage au doigt (le test valide le cadrage de départ), la
 fenêtre de mise à jour sur votre téléphone avec les nouvelles notes.
 
+### Ajouts « Lire ensuite, appui long, pays, sections, Android 11, lecteur »
+| Étape | Résultat |
+|---|---|
+| Titre ajouté à la playlist Apple Music, retrouvé après redémarrage avec son artiste et sa durée (« Tate McRae · 3:28 ») | OK |
+| Menu d'un titre : « Lire ensuite » présent | OK |
+| Appui long sur un titre de l'accueil : menu avec Lire ensuite et Ajouter à la file d'attente | OK |
+| Pays : Algérie puis France, YouTube Music interrogé avec DZ puis FR ; choix gardé après redémarrage ; retour à Automatique | OK |
+| Sections de l'accueil : « Quick picks » désactivée, absente de l'accueil ; réactivée | OK |
+| Menus des titres et des playlists sur Android 11 (fond assombri, panneau opaque) : ouverts à chaque essai | OK |
+| Tests instrumentés (14), menus, renommage, À propos, podcasts, recherche : inchangés | OK |
+
+Non vérifiable ici : « Lire ensuite » pendant une vraie lecture (YouTube
+refuse la lecture sur l'émulateur), le glissement du lecteur au doigt, le
+rechargement de l'accueil au retour du Wi-Fi, le flou derrière les panneaux du
+lecteur sur Android 11, la rapidité des menus sur un téléphone Android 11 réel
+(l'émulateur mesure ~1,5 s dont l'essentiel est le temps de lecture de l'écran
+par l'outil de test), le contenu réellement proposé par YouTube pour un pays.
+
 ## 4. À vérifier sur votre téléphone
 - Lecture réelle d'un titre Spotify via YouTube Music, suivant / précédent /
   aléatoire / répétition dans une playlist importée.
