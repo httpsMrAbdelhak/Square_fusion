@@ -3351,6 +3351,21 @@ fun SquareApp(
                                         playback.title,
                                         asSheet = false,
                                         contextUri = playback.contextUri,
+                                        // Square Fusion: the song whole, as the
+                                        // queue knows it, for the playlists that
+                                        // keep it in Square.
+                                        track = playback.mediaId?.let { id ->
+                                            CatalogTrack(
+                                                uri = id,
+                                                name = playback.title,
+                                                artist = playback.artist,
+                                                album = playback.album,
+                                                albumUri = playback.albumUri,
+                                                durationMs = playback.durationMs,
+                                                explicit = playback.explicit,
+                                                artworkUrl = playback.artworkUrl,
+                                            )
+                                        },
                                     )
                                 },
                                 // The heart is Spotify's library. On the other

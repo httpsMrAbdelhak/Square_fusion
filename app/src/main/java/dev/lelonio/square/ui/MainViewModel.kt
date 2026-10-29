@@ -1459,6 +1459,53 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
 
+    /**
+     * Square Fusion: [uri] as a list already on screen or in the Library holds
+     * it, with everything its row and the player need; null when none does.
+     */
+    private fun knownTrack(uri: String): CatalogTrack? {
+        _playlist.value.tracks.firstOrNull { it.uri == uri }?.let { return it }
+        val videoId = dev.lelonio.square.backend.youtube.YouTubeBackend.videoIdOfUri(uri)
+        if (!SpotifyMatches.isPlaceholder(videoId)) return null
+        val spotifyId = videoId.removePrefix(SpotifyMatches.ID_PREFIX)
+        for (list in SpotifyLibraryStore.state.value.playlists) {
+            val hit = SpotifyLibraryStore.cachedTracks(list.id).firstOrNull { it.id == spotifyId } ?: continue
+            return CatalogTrack(
+                uri = uri,
+                name = hit.title,
+                artist = hit.artist,
+                album = hit.album.orEmpty(),
+                durationMs = (hit.durationMs.takeIf { it > 0 } ?: SpotifyMatches.matchedDurationMs(hit.id) ?: 0).toLong(),
+                artworkUrl = hit.imageUrl,
+            )
+        }
+        return null
+    }
+
+    /**
+     * Square Fusion: the songs added to [playlistUri] that were kept with their
+     * address alone, filled in from YouTube Music, then shown if that page is
+     * open. Songs YouTube does not know stay as they were.
+     */
+    private fun completeAdded(playlistUri: String) {
+        val missing = dev.lelonio.square.fusion.PlaylistCustomizations.added.value[playlistUri].orEmpty()
+            .filter(dev.lelonio.square.fusion.PlaylistCustomizations::incomplete)
+            .map { it.uri }
+            .filterNot { SpotifyMatches.isPlaceholder(dev.lelonio.square.backend.youtube.YouTubeBackend.videoIdOfUri(it)) }
+        if (missing.isEmpty()) return
+        viewModelScope.launch {
+            val found = runCatching { container.youtubeBackend.songs(missing) }
+                .onFailure { android.util.Log.w(TAG, "added songs not filled in: ${describe(it)}") }
+                .getOrNull() ?: return@launch
+            dev.lelonio.square.fusion.PlaylistCustomizations.refreshTracks(playlistUri, found)
+            val open = _playlist.value
+            if (open.uri == playlistUri) {
+                val added = dev.lelonio.square.fusion.PlaylistCustomizations.added.value[playlistUri].orEmpty().associateBy { it.uri }
+                publishPlaylist(open.copy(tracks = open.tracks.map { added[it.uri] ?: it }))
+            }
+        }
+    }
+
     /** Square Fusion: whether one of those already holds the song, from its source or added here. */
     private fun holds(playlistUri: String, trackUri: String?): Boolean {
         if (trackUri == null) return false
@@ -1480,9 +1527,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // the song in Square, after its own; it is not written to Spotify. A
         // song already there is not added twice.
         if (playlist.uri.startsWith(SpotifyLibraryStore.PLAYLIST_PREFIX) && current.batch.isEmpty()) {
-            val song = addingTrack?.takeIf { it.uri == trackUri } ?: CatalogTrack(uri = trackUri, name = current.trackTitle, artist = "")
+            // The song as the list it was picked from shows it; only when no
+            // list on hand knows it, its address, filled in from YouTube Music.
+            val song = addingTrack?.takeIf { it.uri == trackUri } ?: knownTrack(trackUri)
+                ?: CatalogTrack(uri = trackUri, name = current.trackTitle, artist = "")
             if (!holds(playlist.uri, trackUri)) {
+                // A Spotify song not yet found on YouTube Music is played from
+                // what it is; that is remembered with it, whatever list it came from.
+                val videoId = dev.lelonio.square.backend.youtube.YouTubeBackend.videoIdOfUri(trackUri)
+                if (SpotifyMatches.isPlaceholder(videoId) && song.name.isNotBlank() && song.artist.isNotBlank()) {
+                    SpotifyMatches.register(
+                        videoId.removePrefix(SpotifyMatches.ID_PREFIX),
+                        SpotifyMatches.Target(song.name, song.artist, song.album.ifBlank { null }, (song.durationMs / 1000).toInt().takeIf { it > 0 }),
+                    )
+                }
                 dev.lelonio.square.fusion.PlaylistCustomizations.addTrack(playlist.uri, song)
+                if (dev.lelonio.square.fusion.PlaylistCustomizations.incomplete(song)) completeAdded(playlist.uri)
             }
             _addToPlaylist.value = current.copy(busy = null, done = playlist.name, containing = current.containing + playlist.uri)
             _inPlaylists.value = _inPlaylists.value + trackUri
@@ -2839,6 +2899,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         })
         val cached = SpotifyLibraryStore.cachedTracks(id)
         publishPlaylist(base.copy(tracks = asTracks(cached), loading = cached.isEmpty()))
+        completeAdded(playlist.uri)
         playlistJob = viewModelScope.launch {
             SpotifyLibraryStore.loadTracks(id) { page ->
                 if (cached.isEmpty() && _playlist.value.uri == playlist.uri) {

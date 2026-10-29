@@ -499,6 +499,18 @@ class YouTubeBackend(private val account: YouTubeAccount) : MusicBackend {
         page.sections.orEmpty().map { section -> section.title to section.songs.map(::toCatalogTrack) }
     }
 
+    /**
+     * Square Fusion: songs as YouTube Music lists them, by their `ytmusic:track:`
+     * URIs, for songs known only by their address. Unknown ones are left out.
+     */
+    suspend fun songs(uris: List<String>): List<CatalogTrack> {
+        val ids = uris.map(::videoIdOfUri).filter { it.isNotBlank() && !dev.lelonio.square.fusion.spotify.SpotifyMatches.isPlaceholder(it) }
+        if (ids.isEmpty()) return emptyList()
+        return ids.chunked(40).flatMap { chunk ->
+            YouTube.queue(videoIds = chunk).getOrThrow().map(::toCatalogTrack)
+        }
+    }
+
     private fun toCatalogTrack(item: SongItem): CatalogTrack {
         // Every name its own way in, and the record too: what makes the lines
         // under the title in the player lead somewhere, as they do for Spotify.

@@ -56,13 +56,52 @@ object PlaylistCustomizations {
         return true
     }
 
+    /**
+     * Fills in the songs of [uri] kept in Square from [found], the same songs as
+     * their source lists them now: same URI, same place in the list.
+     */
+    @Synchronized
+    fun refreshTracks(uri: String, found: List<dev.lelonio.square.data.CatalogTrack>) {
+        val now = _added.value[uri] ?: return
+        val byUri = found.associateBy { it.uri }
+        val next = now.map { old -> byUri[old.uri]?.let { fresh -> merged(old, fresh) } ?: old }
+        if (next == now) return
+        _added.value = _added.value + (uri to next)
+        prefs?.edit()?.putString(KEY_ADDED + uri, encode(next))?.apply()
+    }
+
+    /** [old] with what it lacks taken from [fresh]; nothing it has is replaced by an empty value. */
+    private fun merged(old: dev.lelonio.square.data.CatalogTrack, fresh: dev.lelonio.square.data.CatalogTrack) =
+        old.copy(
+            name = old.name.ifBlank { fresh.name },
+            artist = old.artist.ifBlank { fresh.artist },
+            artistUri = old.artistUri ?: fresh.artistUri,
+            artists = old.artists.ifEmpty { fresh.artists },
+            album = old.album.ifBlank { fresh.album },
+            albumUri = old.albumUri ?: fresh.albumUri,
+            durationMs = old.durationMs.takeIf { it > 0 } ?: fresh.durationMs,
+            explicit = old.explicit || fresh.explicit,
+            artworkUrl = old.artworkUrl ?: fresh.artworkUrl,
+        )
+
+    /** Whether [track] lacks what its row and the player show. */
+    fun incomplete(track: dev.lelonio.square.data.CatalogTrack) =
+        track.artist.isBlank() || track.artworkUrl == null || track.durationMs <= 0
+
     private fun encode(tracks: List<dev.lelonio.square.data.CatalogTrack>): String =
         org.json.JSONArray().apply {
             tracks.forEach {
                 put(
                     org.json.JSONObject()
                         .put("uri", it.uri).put("name", it.name).put("artist", it.artist)
-                        .put("album", it.album).put("duration", it.durationMs).put("art", it.artworkUrl),
+                        .put("album", it.album).put("duration", it.durationMs).put("art", it.artworkUrl)
+                        .put("artistUri", it.artistUri).put("albumUri", it.albumUri).put("explicit", it.explicit)
+                        .put(
+                            "artists",
+                            org.json.JSONArray().apply {
+                                it.artists.forEach { a -> put(org.json.JSONObject().put("name", a.name).put("uri", a.uri)) }
+                            },
+                        ),
                 )
             }
         }.toString()
@@ -80,6 +119,18 @@ object PlaylistCustomizations {
                         album = o.optString("album"),
                         durationMs = o.optLong("duration"),
                         artworkUrl = if (o.isNull("art")) null else o.optString("art").ifBlank { null },
+                        artistUri = if (o.isNull("artistUri")) null else o.optString("artistUri").ifBlank { null },
+                        albumUri = if (o.isNull("albumUri")) null else o.optString("albumUri").ifBlank { null },
+                        explicit = o.optBoolean("explicit"),
+                        artists = o.optJSONArray("artists")?.let { list ->
+                            (0 until list.length()).map { j ->
+                                val a = list.getJSONObject(j)
+                                dev.lelonio.square.data.CatalogArtist(
+                                    name = a.optString("name"),
+                                    uri = if (a.isNull("uri")) null else a.optString("uri").ifBlank { null },
+                                )
+                            }
+                        }.orEmpty(),
                     )
                 }
             }.getOrNull() ?: return@mapNotNull null
