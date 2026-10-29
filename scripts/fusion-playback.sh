@@ -858,10 +858,17 @@ rec=$!
 sleep 2
 if tap_where motion-mini "$mini"; then
   adb shell dumpsys gfxinfo "$PKG" reset > /dev/null 2>&1
-  wait_open && echo "OK   the bar opens the player" || { echo "FAIL the player did not open from the bar"; fail=1; }
+  if wait_open; then echo "OK   the bar opens the player"; else
+    echo "FAIL the player did not open from the bar"; fail=1
+    dump motion-after-tap; shot motion-after-tap
+    echo "LOG tapped the first match of: $mini"
+    texts motion-mini | tail -n 14
+    echo "LOG after the tap:"; texts motion-after-tap | tail -n 14
+  fi
   sleep 1
-  tap_where motion-close 'desc == "Close"'; sleep 5
-  player_open && { echo "FAIL the arrow did not close the player"; fail=1; } || echo "OK   the arrow closes the player into the bar"
+  if tap_where motion-close 'desc == "Close"'; then sleep 5
+    player_open && { echo "FAIL the arrow did not close the player"; fail=1; } || echo "OK   the arrow closes the player into the bar"
+  else echo "FAIL no arrow to close the player with"; fail=1; fi
   tap_where motion-mini2 "$mini"; wait_open
   # A drag down from the top of the player, released low: closes.
   adb shell input swipe 160 $((screen_h / 5)) 160 $((screen_h * 9 / 10)) 450; sleep 5
