@@ -402,11 +402,20 @@ class PlaybackService : MediaLibraryService() {
         // The app's own mark in the shade, instead of Media3's generic note.
         // The provider is built rather than subclassed: the small icon is the
         // only thing being changed.
-        setMediaNotificationProvider(
-            androidx.media3.session.DefaultMediaNotificationProvider.Builder(this)
-                .build()
-                .apply { setSmallIcon(dev.lelonio.square.R.drawable.ic_notification) },
-        )
+        // Square Fusion: the mark of the icon chosen in the settings, and the
+        // new one as soon as another is chosen, on the notification already up.
+        val notificationProvider = androidx.media3.session.DefaultMediaNotificationProvider.Builder(this)
+            .build()
+            .apply { setSmallIcon(dev.lelonio.square.fusion.AppIcon.current(this@PlaybackService).notificationIcon) }
+        setMediaNotificationProvider(notificationProvider)
+        scope.launch {
+            dev.lelonio.square.fusion.AppIcon.changed.collect { change ->
+                if (change == 0) return@collect
+                notificationProvider.setSmallIcon(dev.lelonio.square.fusion.AppIcon.current(this@PlaybackService).notificationIcon)
+                val live = session
+                if (live != null && player.mediaItemCount > 0) onUpdateNotification(live, false)
+            }
+        }
 
         // The notification and car buttons carry their own state (shuffle, repeat,
         // and heart/like), so they are redrawn whenever the mode or track changes.

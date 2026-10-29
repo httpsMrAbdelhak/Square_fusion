@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Square Fusion: the media notification's mark while one of the glass icons
+    is chosen: that icon's own monochrome layer, the silhouette Android draws
+    a notification icon from. The layer is drawn on the adaptive icon's 108dp
+    canvas with the mark in its middle 66dp; inset outwards so the mark, not
+    the canvas, fills the icon, as the other marks do.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@mipmap/ic_glass_monochrome"
+    android:inset="-19%" />

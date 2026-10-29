@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Square Fusion: the media notification's mark while the BitChord icon is
+    chosen: its monochrome layer (its foreground), brought out of the adaptive
+    icon's canvas as for ic_notification_glass.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_launcher_foreground"
+    android:inset="-19%" />

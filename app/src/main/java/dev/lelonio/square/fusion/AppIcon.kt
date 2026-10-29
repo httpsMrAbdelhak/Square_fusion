@@ -32,6 +32,17 @@ enum class AppIcon(val alias: String, val iconRes: Int, val label: String) {
     PixelGlassClear("LauncherPixelGlassClear", R.mipmap.ic_pixel_glass_clear, "Pixel Glass Clear"),
     PixelGlassClearDark("LauncherPixelGlassClearDark", R.mipmap.ic_pixel_glass_clear_dark, "Pixel Glass Clear Dark");
 
+    /**
+     * The media notification's small icon for this choice: the icon's own
+     * monochrome layer, the silhouette Android draws that icon from.
+     */
+    val notificationIcon: Int
+        get() = when (this) {
+            Square -> R.drawable.ic_notification
+            BitChord -> R.drawable.ic_notification_bitchord
+            else -> R.drawable.ic_notification_glass
+        }
+
     private fun component(context: Context) =
         ComponentName(context.packageName, "dev.lelonio.square.$alias")
 
@@ -43,8 +54,18 @@ enum class AppIcon(val alias: String, val iconRes: Int, val label: String) {
             } ?: Square
         }
 
+        private val _changed = kotlinx.coroutines.flow.MutableStateFlow(0)
+
+        /** Bumped each time another icon is chosen; the playback notification follows it. */
+        val changed: kotlinx.coroutines.flow.StateFlow<Int> = _changed
+
         /** Enables [icon] first, then disables the rest, so there is never a moment with no launcher entry. */
         fun apply(context: Context, icon: AppIcon) {
+            applyComponents(context, icon)
+            _changed.value++
+        }
+
+        private fun applyComponents(context: Context, icon: AppIcon) {
             val pm = context.packageManager
             pm.setComponentEnabledSetting(
                 icon.component(context),
