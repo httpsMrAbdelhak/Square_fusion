@@ -872,6 +872,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 loadYouTubeHome(force = true)
             }
         }
+        // Square Fusion: the Home page that could not be read without a
+        // connection is read again when it comes back; a page already on
+        // screen is left as it is, and one being read is not asked twice.
+        viewModelScope.launch {
+            dev.lelonio.square.playback.NetworkWatch.returns.drop(1).collect {
+                if (_youtubeHome.value.rows.isEmpty() || _youtubeHome.value.error != null) loadYouTubeHome(force = true)
+                if (_sourceNew.value.rows.isEmpty()) sourceNewJob?.cancel()
+                if (_sourceRadio.value.rows.isEmpty()) sourceRadioJob?.cancel()
+            }
+        }
     }
 
     init {

@@ -1741,6 +1741,7 @@ fun SquareApp(
                                 },
                                 onPickYouTubeChip = viewModel::selectYouTubeChip,
                                 onLoadMoreYouTube = viewModel::loadMoreYouTubeHome,
+                                onRetryYouTube = { viewModel.loadYouTubeHome(force = true) },
                                 youtubeSignedIn = youtubeAccountName != null,
                                 onYouTubeSignIn = { showYouTubeLogin = true },
                                 onUseYouTube = {

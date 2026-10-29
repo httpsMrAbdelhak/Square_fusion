@@ -117,6 +117,7 @@ class NetworkWatch(context: Context, private val scope: CoroutineScope) {
             // here was how the library stayed on the downloads after the
             // signal returned.
             SessionKeeper.networkUp(returned)
+            if (returned) _returns.value++
             OfflineMode.setSlow(false)
             return
         }
@@ -269,11 +270,16 @@ class NetworkWatch(context: Context, private val scope: CoroutineScope) {
         } ?: false
     }
 
-    private companion object {
-        const val TAG = "SquareNetwork"
+    companion object {
+        private val _returns = kotlinx.coroutines.flow.MutableStateFlow(0)
+
+        /** Square Fusion: bumped each time the connection comes back, for pages that failed without it. */
+        val returns: kotlinx.coroutines.flow.StateFlow<Int> = _returns
+
+        private const val TAG = "SquareNetwork"
 
         /** How long the network has to stay gone before the app believes it. */
-        const val GRACE_MS = 6_000L
+        private const val GRACE_MS = 6_000L
 
         /** How long the system takes to stop naming a network that has gone. */
         const val SETTLE_MS = 1_200L

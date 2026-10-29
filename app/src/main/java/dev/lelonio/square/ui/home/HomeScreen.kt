@@ -171,6 +171,8 @@ fun HomeScreen(
     /** Whether a Google account is signed in; the page suggests one otherwise. */
     youtubeSignedIn: Boolean = true,
     onYouTubeSignIn: () -> Unit = {},
+    /** Square Fusion: reads YouTube Music's home again after it failed. */
+    onRetryYouTube: () -> Unit = {},
     /** Signed out of Spotify: play from the other source instead. */
     onUseYouTube: () -> Unit = {},
     /**
@@ -209,6 +211,7 @@ fun HomeScreen(
             onLoadMore = onLoadMoreYouTube,
             signedIn = youtubeSignedIn,
             onSignIn = onYouTubeSignIn,
+            onRetry = onRetryYouTube,
         )
         return
     }
@@ -1275,6 +1278,8 @@ private fun YouTubeHome(
     onLoadMore: () -> Unit,
     signedIn: Boolean,
     onSignIn: () -> Unit,
+    /** Square Fusion: reads the page again after it failed; see MainViewModel.loadYouTubeHome. */
+    onRetry: () -> Unit = {},
 ) {
     val empty = home.rows.isEmpty() && recent.isEmpty()
     if (empty) {
@@ -1292,6 +1297,10 @@ private fun YouTubeHome(
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 40.dp),
                     )
+                    // Square Fusion: the page could not be read; the same
+                    // button the other pages offer. A spinner stands in for it
+                    // while it reads, so it cannot be pressed twice.
+                    if (home.error != null) GlassAction(stringResource(R.string.retry), backdrop, onRetry)
                 }
             }
             // Over the empty state rather than above it: the settings are the
