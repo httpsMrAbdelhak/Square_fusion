@@ -329,7 +329,11 @@ internal fun ContentCountryPicker() {
                 .fillMaxWidth()
                 .padding(horizontal = 18.dp, vertical = 10.dp),
         )
-        androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 380.dp)) {
+        // Back to the top on every change of the search, where Automatic and
+        // the best matches are; a list left half-way was a list of strangers.
+        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+        androidx.compose.runtime.LaunchedEffect(query) { listState.scrollToItem(0) }
+        androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 380.dp), state = listState) {
             if (query.isBlank()) {
                 item("auto") {
                     ChoiceRow(
