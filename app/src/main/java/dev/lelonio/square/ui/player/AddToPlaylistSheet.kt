@@ -137,19 +137,6 @@ fun AddToPlaylistSheet(
                     )
                 }
 
-                if (state.done != null || state.removed != null) {
-                    Text(
-                        if (state.removed != null) {
-                            stringResource(R.string.removed_from, state.removed.orEmpty())
-                        } else {
-                            stringResource(R.string.added_to, state.done.orEmpty())
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
-                    )
-                }
-
                 if (state.playlists.isEmpty()) {
                     Text(
                         stringResource(R.string.no_playlists_in_account),
@@ -164,7 +151,7 @@ fun AddToPlaylistSheet(
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        state.playlists.ticksFirst(state).forEach { playlist ->
+                        steadyOrder(state).forEach { playlist ->
                             PlaylistRow(
                                 playlist = playlist,
                                 busy = state.busy == playlist.uri,
@@ -224,19 +211,6 @@ fun PlaylistPicker(
                     )
                 }
 
-                if (state.done != null || state.removed != null) {
-                    Text(
-                        if (state.removed != null) {
-                            stringResource(R.string.removed_from, state.removed.orEmpty())
-                        } else {
-                            stringResource(R.string.added_to, state.done.orEmpty())
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
-                    )
-                }
-
                 if (state.playlists.isEmpty()) {
                     Text(
                         stringResource(R.string.no_playlists_in_account),
@@ -251,7 +225,7 @@ fun PlaylistPicker(
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        state.playlists.ticksFirst(state).forEach { playlist ->
+                        steadyOrder(state).forEach { playlist ->
                             PlaylistRow(
                                 playlist = playlist,
                                 busy = state.busy == playlist.uri,
@@ -306,35 +280,79 @@ private fun PlaylistRow(
                 .padding(start = 16.dp)
                 .weight(1f),
         )
-        when {
-            busy -> CircularProgressIndicator(
+        // Square Fusion: the mark eases in and out in place, so a tap answers
+        // at once without anything in the list moving.
+        val mark = when {
+            busy -> 1
+            liked -> 2
+            inIt -> 3
+            added -> 4
+            else -> 0
+        }
+        androidx.compose.animation.Crossfade(
+            targetState = mark,
+            animationSpec = tween(160),
+            label = "mark",
+            modifier = Modifier.size(20.dp),
+        ) { shown ->
+        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+        when (shown) {
+            1 -> CircularProgressIndicator(
                 color = GlassInkDim,
                 strokeWidth = 2.dp,
                 modifier = Modifier.size(18.dp),
             )
 
-            liked -> Icon(
+            2 -> Icon(
                 PhosphorIcons.Fill.Heart,
                 contentDescription = stringResource(R.string.remove_from_liked),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp),
             )
 
-            inIt -> Icon(
+            3 -> Icon(
                 PhosphorIcons.Regular.Check,
                 contentDescription = stringResource(R.string.remove_from_playlist),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp),
             )
 
-            added -> Icon(
+            4 -> Icon(
                 PhosphorIcons.Regular.Check,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp),
             )
         }
+        }
+        }
     }
+}
+
+/**
+ * Square Fusion: the rows in [ticksFirst] order while the lists arrive, then
+ * held still from the first tap on, so picking a playlist never moves it, or
+ * the ones around it, out from under the finger. Lists that arrive later go
+ * below.
+ */
+@Composable
+private fun steadyOrder(state: MainViewModel.AddToPlaylistState): List<CatalogPlaylist> {
+    val held = androidx.compose.runtime.remember(state.trackUri, state.batch) {
+        androidx.compose.runtime.mutableStateOf<List<String>?>(null)
+    }
+    val touched = state.busy != null || state.done != null || state.removed != null
+    val ranked = state.playlists.ticksFirst(state)
+    val fixed = held.value
+    if (!touched || fixed == null) {
+        // The order shown is the one a tap will keep.
+        val uris = ranked.map { it.uri }
+        if (fixed != uris) androidx.compose.runtime.SideEffect { held.value = uris }
+        return ranked
+    }
+    val byUri = state.playlists.associateBy { it.uri }
+    val fresh = ranked.filter { it.uri !in fixed }
+    if (fresh.isNotEmpty()) androidx.compose.runtime.SideEffect { held.value = fixed + fresh.map { it.uri } }
+    return fixed.mapNotNull(byUri::get) + fresh
 }
 
 /**
