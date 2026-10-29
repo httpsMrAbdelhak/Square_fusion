@@ -689,13 +689,14 @@ if tap_where avatar 'clickable and x1 > 230 and y2 < 160'; then
     # The page may still be sliding in, and the section sits lower down.
     for i in 1 2 3 4 5 6; do
       dump about
-      grep -q 'text="Developed by"' "$OUT/about.xml" && break
+      grep -qi 'text="Developed by"' "$OUT/about.xml" && break
       sleep 2
       [ "$i" -gt 2 ] && adb shell input swipe 160 $((screen_h * 3 / 4)) 160 $((screen_h / 4)) 400 && sleep 2
     done
     shot about
     if grep -qi 'ko-fi\|Support development' "$OUT/about.xml"; then echo "FAIL About still has the support links"; fail=1; texts about | head -n 20; else echo "OK   About without support links"; fi
-    if grep -q 'text="Developed by"' "$OUT/about.xml" && grep -q 'Lelonio' "$OUT/about.xml"; then echo "OK   About: Developed by Lelonio"; else echo "FAIL About does not show Developed by Lelonio"; fail=1; texts about | head -n 20; fi
+    # The section title is drawn in capitals.
+    if grep -qi 'text="Developed by"' "$OUT/about.xml" && grep -q 'github.com/Lelonio' "$OUT/about.xml"; then echo "OK   About: Developed by Lelonio"; else echo "FAIL About does not show Developed by Lelonio"; fail=1; texts about | head -n 20; fi
     grep -q 'httpsMrAbdelhak' "$OUT/about.xml" && echo "OK   About shows this repository" || echo "WARN this repository is not on the first screen of About"
   else
     echo "WARN no About tile"; texts settings | head -n 20

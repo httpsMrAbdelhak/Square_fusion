@@ -3729,8 +3729,11 @@ fun SquareApp(
                         // Writing to a playlist needs the account: Spotify's
                         // Web API, or a signed-in YouTube Music. With no
                         // network the entry would only ever fail.
+                        // Square Fusion: or the Library's imported and Spotify
+                        // playlists, whose added songs are kept in Square.
                         if ((backend == dev.lelonio.square.backend.BackendId.SPOTIFY ||
-                                viewModel.canEditPlaylists) && !offlineNow
+                                viewModel.canEditPlaylists) && !offlineNow ||
+                            viewModel.hasSquarePlaylists
                         ) {
                             TrackSheetAction(stringResource(R.string.add_to_playlist), PhosphorIcons.Regular.Plus) {
                                 trackMenu = null

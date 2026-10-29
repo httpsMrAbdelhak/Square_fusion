@@ -5191,6 +5191,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Whether the active source lets the account make and change playlists. */
     val canEditPlaylists: Boolean get() = container.activeBackend.canEditPlaylists
 
+    /** Square Fusion: whether the Library holds playlists a song can be added to in Square. */
+    val hasSquarePlaylists: Boolean
+        get() = container.activeBackend.id != BackendId.SPOTIFY &&
+            SpotifyLibraryStore.state.value.playlists.any { it.id != SpotifyFreeLibrary.LIKED_ID }
+
     /** Whether a track can be taken out of this particular list. */
     fun canRemoveFrom(playlistUri: String?): Boolean {
         val uri = playlistUri ?: return false
