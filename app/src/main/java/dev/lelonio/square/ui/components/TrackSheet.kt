@@ -72,20 +72,7 @@ fun BoxScope.TrackSheet(
         exit = fadeOut(tween(180)),
         modifier = Modifier.fillMaxSize(),
     ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                // The whole page, out of focus. Drawn from the recorded layer
-                // rather than with `Modifier.blur` on the content itself, which
-                // would blur the screen for everyone including the sheet.
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { androidx.compose.ui.graphics.RectangleShape },
-                    effects = { blur(28f.dp.toPx()) },
-                    onDrawSurface = { drawRect(Color.Black.copy(alpha = 0.42f)) },
-                )
-                .clickable(interactionSource = null, indication = null, onClick = onDismiss),
-        )
+        SheetScrim(backdrop, onDismiss)
     }
 
     AnimatedVisibility(
@@ -95,7 +82,7 @@ fun BoxScope.TrackSheet(
         modifier = Modifier.align(Alignment.Center),
     ) {
         val shape = RoundedCornerShape(30.dp)
-        GlassSurface(
+        SheetPanel(
             backdrop = backdrop,
             shape = shape,
             surfaceColor = SheetFilm,
@@ -186,6 +173,64 @@ fun TrackSheetAction(
             style = MaterialTheme.typography.bodyLarge,
             color = tint,
             modifier = Modifier.padding(start = 16.dp),
+        )
+    }
+}
+
+/**
+ * Square Fusion: Android 11 draws the app's sheets without glass. Its blur has
+ * no RenderEffect and is done by hand over the whole recorded screen, which on
+ * slower phones held a menu back for seconds; a still scrim and a solid panel
+ * open at once. Android 12 and later keep the glass.
+ */
+internal val PlainSheets: Boolean = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S
+
+/** The page behind a sheet: out of focus, or on Android 11 dimmed; a tap on it closes the sheet. */
+@Composable
+internal fun SheetScrim(backdrop: Backdrop, onDismiss: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .then(
+                if (PlainSheets) {
+                    Modifier.background(Color.Black.copy(alpha = 0.6f))
+                } else {
+                    // The whole page, out of focus. Drawn from the recorded layer
+                    // rather than with `Modifier.blur` on the content itself, which
+                    // would blur the screen for everyone including the sheet.
+                    Modifier.drawBackdrop(
+                        backdrop = backdrop,
+                        shape = { androidx.compose.ui.graphics.RectangleShape },
+                        effects = { blur(28f.dp.toPx()) },
+                        onDrawSurface = { drawRect(Color.Black.copy(alpha = 0.42f)) },
+                    )
+                },
+            )
+            .clickable(interactionSource = null, indication = null, onClick = onDismiss),
+    )
+}
+
+/** A sheet's panel: glass, or on Android 11 a solid surface of the page's own colour. */
+@Composable
+internal fun SheetPanel(
+    backdrop: Backdrop,
+    shape: androidx.compose.ui.graphics.Shape,
+    surfaceColor: Color,
+    blurScale: Float,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    if (PlainSheets) {
+        val solid = if (dev.lelonio.square.ui.theme.lightPage()) Color(0xFFF2F2F5) else Color(0xFF1C1C21)
+        Box(modifier.background(solid, shape)) { content() }
+    } else {
+        GlassSurface(
+            backdrop = backdrop,
+            shape = shape,
+            surfaceColor = surfaceColor,
+            blurScale = blurScale,
+            modifier = modifier,
+            content = content,
         )
     }
 }

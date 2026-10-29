@@ -75,17 +75,7 @@ fun AddToPlaylistSheet(
         exit = fadeOut(tween(180)),
         modifier = Modifier.fillMaxSize(),
     ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { RectangleShape },
-                    effects = { blur(28f.dp.toPx()) },
-                    onDrawSurface = { drawRect(Color.Black.copy(alpha = 0.42f)) },
-                )
-                .clickable(interactionSource = null, indication = null, onClick = onDismiss),
-        )
+        dev.lelonio.square.ui.components.SheetScrim(backdrop, onDismiss)
     }
 
     AnimatedVisibility(
@@ -95,7 +85,7 @@ fun AddToPlaylistSheet(
         exit = slideOutVertically(tween(180)) { it / 6 } + fadeOut(tween(150)),
         modifier = Modifier.align(Alignment.BottomCenter),
     ) {
-        GlassSurface(
+        dev.lelonio.square.ui.components.SheetPanel(
             backdrop = backdrop,
             shape = RoundedCornerShape(28.dp),
             surfaceColor = GlassFilm,

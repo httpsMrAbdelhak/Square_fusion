@@ -1590,7 +1590,13 @@ fun SquareApp(
                     Modifier
                         .fillMaxSize()
                         .then(
-                            if (sheetsOpen || sheetsRecording) Modifier.layerBackdrop(overlayBackdrop)
+                            // Square Fusion: not for the song, playlist and
+                            // add-to-playlist sheets on Android 11, which are
+                            // drawn without glass there; see PlainSheets.
+                            if ((sheetsOpen || sheetsRecording) &&
+                                (!dev.lelonio.square.ui.components.PlainSheets ||
+                                    friendsOpen || updateOpen || sharedTrack != null)
+                            ) Modifier.layerBackdrop(overlayBackdrop)
                             else Modifier,
                         ),
                 ) {

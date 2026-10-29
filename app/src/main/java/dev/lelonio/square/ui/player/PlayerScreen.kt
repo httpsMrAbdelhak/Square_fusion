@@ -1,5 +1,7 @@
 package dev.lelonio.square.ui.player
 
+import dev.lelonio.square.ui.glass.backdrop.drawBackdrop
+import dev.lelonio.square.ui.glass.backdrop.effects.blur
 import dev.lelonio.square.ui.components.copyFrame
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -1058,6 +1060,24 @@ fun PlayerScreen(
             if (djOver > 0f) {
                 DjVoice(Modifier.fillMaxSize().graphicsLayer { alpha = djOver })
             }
+        }
+
+        // Square Fusion, Android 11 only: Modifier.blur does nothing before
+        // Android 12, so an open panel (lyrics, queue, Add to a playlist) sat on
+        // the sharp picture. The same picture blurred by the glass's own
+        // Android 11 blur goes over it instead, fading with the panel.
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S && canvasBlur > 0.dp) {
+            val shown = canvasBlur / 26.dp
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = shown }
+                    .drawBackdrop(
+                        backdrop = canvasBackdrop,
+                        shape = { androidx.compose.ui.graphics.RectangleShape },
+                        effects = { blur(26.dp.toPx()) },
+                    ),
+            )
         }
 
         CompositionLocalProvider(LocalContentColor provides GlassInk) {
