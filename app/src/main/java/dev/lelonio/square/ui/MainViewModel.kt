@@ -1255,28 +1255,37 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         asSheet: Boolean = true,
         /** What the track is playing from, when it is; see [AddToPlaylistState.containing]. */
         contextUri: String? = null,
+        /** Square Fusion: the song itself, kept with it in a playlist that holds its songs in Square. */
+        track: CatalogTrack? = null,
     ) {
         // The other source writes through its own account, to the lists it
         // says can be written to; they are asked for as the sheet opens.
         val backend = container.activeBackend
         if (backend.id != BackendId.SPOTIFY) {
+            addingTrack = track?.takeIf { it.uri == trackUri }
             // Square Fusion: a Spotify song not yet matched has no YouTube id to add.
             val writable = trackUri != null && backend.owns(trackUri) && backend.canEditPlaylists &&
                 !dev.lelonio.square.fusion.spotify.SpotifyMatches.isPlaceholder(
                     dev.lelonio.square.backend.youtube.YouTubeBackend.videoIdOfUri(trackUri),
                 )
+            // Square Fusion: and the Spotify and Apple Music playlists of the
+            // Library, whose added songs are kept in Square (Spotify is not
+            // written to).
+            val local = if (trackUri != null && backend.owns(trackUri)) squarePlaylists() else emptyList()
             _addToPlaylist.value = AddToPlaylistState(
                 open = asSheet,
                 trackUri = trackUri,
                 trackTitle = trackTitle,
-                error = if (writable) null else string(R.string.track_cannot_be_added),
+                playlists = local,
+                containing = local.filterTo(mutableSetOf()) { holds(it.uri, trackUri) }.mapTo(mutableSetOf()) { it.uri },
+                error = if (writable || local.isNotEmpty()) null else string(R.string.track_cannot_be_added),
             )
             if (writable) viewModelScope.launch {
                 val lists = runCatching { backend.writablePlaylists() }
                     .onFailure { android.util.Log.w(TAG, "writable playlists unavailable: ${describe(it)}") }
                     .getOrDefault(emptyList())
                 if (_addToPlaylist.value.trackUri == trackUri) {
-                    _addToPlaylist.value = _addToPlaylist.value.copy(playlists = lists)
+                    _addToPlaylist.value = _addToPlaylist.value.copy(playlists = lists + local)
                 }
             }
             return
@@ -1437,11 +1446,49 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * icon, and there is nothing to undo it with if the call turns out to have
      * failed. So the sheet waits, then says which playlist it went into.
      */
+    /** Square Fusion: the song the add sheet was opened for, with its details. */
+    private var addingTrack: CatalogTrack? = null
+
+    /** Square Fusion: the Library's Spotify and Apple Music playlists, as the Library shows them. */
+    private fun squarePlaylists(): List<CatalogPlaylist> =
+        SpotifyLibraryStore.state.value.playlists
+            .filter { it.id != SpotifyFreeLibrary.LIKED_ID }
+            .map {
+                dev.lelonio.square.fusion.PlaylistCustomizations.apply(
+                    CatalogPlaylist(uri = it.uri, name = it.name, artworkUrl = it.imageUrl, mine = false),
+                )
+            }
+
+    /** Square Fusion: whether one of those already holds the song, from its source or added here. */
+    private fun holds(playlistUri: String, trackUri: String?): Boolean {
+        if (trackUri == null) return false
+        val id = SpotifyLibraryStore.playlistIdOf(playlistUri) ?: return false
+        val videoId = dev.lelonio.square.backend.youtube.YouTubeBackend.videoIdOfUri(trackUri)
+        return dev.lelonio.square.fusion.PlaylistCustomizations.added.value[playlistUri].orEmpty().any { it.uri == trackUri } ||
+            SpotifyLibraryStore.cachedTracks(id).any {
+                SpotifyMatches.uriFor(it.id) == trackUri || SpotifyMatches.known(it.id) == videoId
+            }
+    }
+
     fun addToPlaylist(playlist: CatalogPlaylist) {
         val current = _addToPlaylist.value
         val trackUri = current.trackUri ?: return
         if (current.busy != null) return
         val id = playlist.uri.substringAfterLast(':')
+
+        // Square Fusion: a Spotify or Apple Music playlist of the Library keeps
+        // the song in Square, after its own; it is not written to Spotify. A
+        // song already there is not added twice.
+        if (playlist.uri.startsWith(SpotifyLibraryStore.PLAYLIST_PREFIX) && current.batch.isEmpty()) {
+            val song = addingTrack?.takeIf { it.uri == trackUri } ?: CatalogTrack(uri = trackUri, name = current.trackTitle, artist = "")
+            if (!holds(playlist.uri, trackUri)) {
+                dev.lelonio.square.fusion.PlaylistCustomizations.addTrack(playlist.uri, song)
+            }
+            _addToPlaylist.value = current.copy(busy = null, done = playlist.name, containing = current.containing + playlist.uri)
+            _inPlaylists.value = _inPlaylists.value + trackUri
+            if (_playlist.value.uri == playlist.uri) openPlaylist(playlist)
+            return
+        }
 
         if (current.batch.isNotEmpty()) {
             addAllToPlaylist(playlist, current.batch)
@@ -2778,7 +2825,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             description = known?.owner.orEmpty(),
             mine = false,
         )
-        fun asTracks(list: List<SpotifyTrack>) = list.map {
+        // Square Fusion: and the songs added to it in Square, after its own.
+        fun asTracks(list: List<SpotifyTrack>) = withAdded(playlist.uri, list.map {
             CatalogTrack(
                 uri = SpotifyMatches.uriFor(it.id),
                 name = it.title,
@@ -2788,7 +2836,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 durationMs = (it.durationMs.takeIf { ms -> ms > 0 } ?: SpotifyMatches.matchedDurationMs(it.id) ?: 0).toLong(),
                 artworkUrl = it.imageUrl,
             )
-        }
+        })
         val cached = SpotifyLibraryStore.cachedTracks(id)
         publishPlaylist(base.copy(tracks = asTracks(cached), loading = cached.isEmpty()))
         playlistJob = viewModelScope.launch {
@@ -2809,6 +2857,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
         }
+    }
+
+    /** Square Fusion: [tracks], then the songs added to [uri] in Square that are not among them. */
+    private fun withAdded(uri: String, tracks: List<CatalogTrack>): List<CatalogTrack> {
+        val added = dev.lelonio.square.fusion.PlaylistCustomizations.added.value[uri].orEmpty()
+        if (added.isEmpty()) return tracks
+        val there = tracks.mapTo(HashSet()) { it.uri }
+        return tracks + added.filter { it.uri !in there }
     }
 
     /** Square Fusion: a followed Spotify artist opens as the same artist on YouTube Music. */
@@ -5507,6 +5563,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun deletePlaylist(uri: String) = viewModelScope.launch {
+        // Square Fusion: a playlist imported from a link is Square's own: it
+        // leaves the Library, and nothing is asked of a service.
+        SpotifyLibraryStore.playlistIdOf(uri)?.takeIf { SpotifyLibraryStore.playlist(it)?.imported == true }?.let { id ->
+            SpotifyLibraryStore.removeImported(id)
+            return@launch
+        }
         val ready = _state.value as? UiState.Ready
         val before = ready?.playlists
         if (ready != null) {

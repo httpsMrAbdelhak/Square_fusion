@@ -35,7 +35,56 @@ object PlaylistCustomizations {
         prefs = app.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         dir = File(app.filesDir, COVERS).apply { mkdirs() }
         _all.value = read()
+        _added.value = readAdded()
     }
+
+    // ── Songs added in Square to a playlist whose source cannot take them ──
+
+    private val _added = MutableStateFlow<Map<String, List<dev.lelonio.square.data.CatalogTrack>>>(emptyMap())
+
+    /** By playlist URI, in the order they were added. Shown after the source's own songs. */
+    val added: StateFlow<Map<String, List<dev.lelonio.square.data.CatalogTrack>>> = _added.asStateFlow()
+
+    /** Adds [track] to the end of [uri]'s songs kept in Square; false when it is already there. */
+    @Synchronized
+    fun addTrack(uri: String, track: dev.lelonio.square.data.CatalogTrack): Boolean {
+        val now = _added.value[uri].orEmpty()
+        if (now.any { it.uri == track.uri }) return false
+        val next = now + track
+        _added.value = _added.value + (uri to next)
+        prefs?.edit()?.putString(KEY_ADDED + uri, encode(next))?.apply()
+        return true
+    }
+
+    private fun encode(tracks: List<dev.lelonio.square.data.CatalogTrack>): String =
+        org.json.JSONArray().apply {
+            tracks.forEach {
+                put(
+                    org.json.JSONObject()
+                        .put("uri", it.uri).put("name", it.name).put("artist", it.artist)
+                        .put("album", it.album).put("duration", it.durationMs).put("art", it.artworkUrl),
+                )
+            }
+        }.toString()
+
+    private fun readAdded(): Map<String, List<dev.lelonio.square.data.CatalogTrack>> =
+        prefs?.all.orEmpty().filterKeys { it.startsWith(KEY_ADDED) }.mapNotNull { (key, value) ->
+            val list = runCatching {
+                val array = org.json.JSONArray(value as String)
+                (0 until array.length()).map { i ->
+                    val o = array.getJSONObject(i)
+                    dev.lelonio.square.data.CatalogTrack(
+                        uri = o.getString("uri"),
+                        name = o.optString("name"),
+                        artist = o.optString("artist"),
+                        album = o.optString("album"),
+                        durationMs = o.optLong("duration"),
+                        artworkUrl = if (o.isNull("art")) null else o.optString("art").ifBlank { null },
+                    )
+                }
+            }.getOrNull() ?: return@mapNotNull null
+            key.removePrefix(KEY_ADDED) to list
+        }.toMap()
 
     fun get(uri: String?): Custom? = uri?.let { _all.value[it] }
 
@@ -73,6 +122,8 @@ object PlaylistCustomizations {
     fun forget(uri: String) {
         get(uri)?.cover?.let(::deleteCover)
         edit(uri) { Custom() }
+        _added.value = _added.value - uri
+        prefs?.edit()?.remove(KEY_ADDED + uri)?.apply()
     }
 
     private fun deleteCover(address: String) {
@@ -113,4 +164,5 @@ object PlaylistCustomizations {
     private const val COVERS = "playlist_covers"
     private const val KEY_NAME = "name:"
     private const val KEY_COVER = "cover:"
+    private const val KEY_ADDED = "added:"
 }

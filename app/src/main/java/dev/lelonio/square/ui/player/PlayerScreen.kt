@@ -1796,7 +1796,7 @@ fun PlayerScreen(
                                 // out grey over a brown page.
                                 backdrop = glassBackdrop,
                             )
-                            TimeRow(shownPosition, state.durationMs, state.mediaId)
+                            TimeRow(shownPosition, state.durationMs, state.mediaId, glassBackdrop)
 
                             Spacer(Modifier.height(if (sideways) 6.dp else 14.dp))
                         }
@@ -2500,7 +2500,13 @@ private fun Modifier.plainClickable(onClick: () -> Unit): Modifier {
 
 /** Isolated so the ticking position recomposes only these two labels. */
 @Composable
-internal fun TimeRow(positionMs: State<Long>, durationMs: Long, mediaId: String? = null) {
+internal fun TimeRow(
+    positionMs: State<Long>,
+    durationMs: Long,
+    mediaId: String? = null,
+    /** Square Fusion: what the quality pill's glass shows through. */
+    backdrop: Backdrop? = null,
+) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(
             formatDuration(positionMs.value),
@@ -2509,7 +2515,9 @@ internal fun TimeRow(positionMs: State<Long>, durationMs: Long, mediaId: String?
         )
         // Square Fusion: the sound actually playing, between the two times.
         if (mediaId != null) {
-            QualityLine(mediaId, durationMs, Modifier.weight(1f).padding(horizontal = 8.dp))
+            Box(Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+                QualityLine(mediaId, durationMs, backdrop)
+            }
         }
         Text(
             formatDuration(durationMs),
@@ -2531,7 +2539,7 @@ internal fun TimeRow(positionMs: State<Long>, durationMs: Long, mediaId: String?
  * has said what it is playing.
  */
 @Composable
-private fun QualityLine(mediaId: String, durationMs: Long, modifier: Modifier = Modifier) {
+private fun QualityLine(mediaId: String, durationMs: Long, backdrop: Backdrop?) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val decodedAll by dev.lelonio.square.backend.youtube.AudioQuality.decoded.collectAsStateWithLifecycle()
     val statedAll by dev.lelonio.square.backend.youtube.AudioQuality.stated.collectAsStateWithLifecycle()
@@ -2562,14 +2570,22 @@ private fun QualityLine(mediaId: String, durationMs: Long, modifier: Modifier = 
             ?.takeIf { dev.lelonio.square.backend.youtube.AudioQuality.codecOfStated(it) == codec }
             ?.kbps?.takeIf { it > 0 }
     }
-    Text(
-        if (kbps != null) stringResource(R.string.fusion_quality_line, codec, kbps) else codec,
-        style = MaterialTheme.typography.labelSmall,
-        color = GlassInkDim,
-        maxLines = 1,
-        textAlign = TextAlign.Center,
-        modifier = modifier,
-    )
+    // On a small pill of the app's glass, over what the player shows behind it.
+    dev.lelonio.square.ui.glass.LiquidButton(
+        onClick = {},
+        backdrop = backdrop ?: dev.lelonio.square.ui.glass.backdrop.backdrops.emptyBackdrop(),
+        isInteractive = false,
+        contentHeight = 20.dp,
+        contentPadding = 9.dp,
+    ) {
+        Text(
+            if (kbps != null) stringResource(R.string.fusion_quality_line, codec, kbps) else codec,
+            style = MaterialTheme.typography.labelSmall,
+            color = GlassInk,
+            maxLines = 1,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 @Composable

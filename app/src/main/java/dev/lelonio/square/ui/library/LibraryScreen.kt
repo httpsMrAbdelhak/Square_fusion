@@ -579,7 +579,8 @@ private fun Header(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.library), style = MaterialTheme.typography.displayLarge)
+                // Square Fusion: on one line, a little smaller where the screen is narrow.
+                dev.lelonio.square.ui.components.FitText(stringResource(R.string.library), style = MaterialTheme.typography.displayLarge)
                 // Counting whatever the chips are showing, and saying so: the
                 // same number labelled "playlists" under the albums chip is a
                 // line that contradicts the screen it sits on.

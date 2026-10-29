@@ -822,21 +822,21 @@ fun SettingsScreen(
         if (shown == SettingsPage.App && "fusion-performance" in openGroups) groupEnd(Group.PERFORMANCE)
 
         if (shown == SettingsPage.About) item("author") {
-            // Square Fusion: the repository this build comes from, where the
-            // original developer's page and Ko-fi link were.
-            Section(stringResource(R.string.fusion_source_code)) {
+            Section(stringResource(R.string.developed_by)) {
                 val uriHandler = LocalUriHandler.current
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clickable { uriHandler.openUri(FUSION_REPO_URL) }
+                        .clickable { uriHandler.openUri(GITHUB_URL) }
                         .padding(horizontal = 18.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // GitHub serves the account picture at `<user>.png`.
+                    // GitHub serves the account picture at `<user>.png`, so the
+                    // avatar follows whatever it is set to rather than being a
+                    // copy checked in here.
                     Artwork(
-                        url = "https://github.com/$FUSION_OWNER.png",
-                        title = FUSION_OWNER,
+                        url = "$GITHUB_URL.png",
+                        title = GITHUB_USER,
                         modifier = Modifier
                             .size(54.dp)
                             .softShadow(CircleShape, elevation = 10.dp),
@@ -848,9 +848,9 @@ fun SettingsScreen(
                             .weight(1f)
                             .padding(start = 14.dp),
                     ) {
-                        Text(FUSION_OWNER, style = MaterialTheme.typography.titleMedium)
+                        Text(GITHUB_USER, style = MaterialTheme.typography.titleMedium)
                         Text(
-                            FUSION_REPO_URL.removePrefix("https://"),
+                            GITHUB_URL.removePrefix("https://"),
                             style = MaterialTheme.typography.bodySmall,
                             color = InkDim,
                         )
@@ -862,6 +862,7 @@ fun SettingsScreen(
                         modifier = Modifier.size(18.dp),
                     )
                 }
+                // Square Fusion: the row for the developer's Ko-fi page is not here.
             }
         }
 
@@ -2447,6 +2448,7 @@ private val LICENCES = listOf(
     "BitChord" to "GPL-3.0",
 )
 
-private const val FUSION_OWNER = "httpsMrAbdelhak"
+private const val GITHUB_USER = "Lelonio"
+private const val GITHUB_URL = "https://github.com/Lelonio"
 private const val FUSION_REPO_URL = "https://github.com/httpsMrAbdelhak/Square_fusion"
 private const val NEW_ISSUE_URL = "$FUSION_REPO_URL/issues/new"

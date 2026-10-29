@@ -96,11 +96,22 @@ fun CreatePlaylistDialog(
     val focus = remember { FocusRequester() }
     // The system's photo picker: no permission to ask for, and only the one
     // picture it hands back is ever readable.
+    // Square Fusion: the picture picked is framed first; see ImageCropDialog.
+    var framing by remember { mutableStateOf<Uri?>(null) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked ->
-        if (picked != null) {
-            cover = picked
-            resetCover = false
-        }
+        if (picked != null) framing = picked
+    }
+    framing?.let { picked ->
+        ImageCropDialog(
+            source = picked,
+            shape = CropShape.SQUARE,
+            onCropped = {
+                cover = it
+                resetCover = false
+                framing = null
+            },
+            onDismiss = { framing = null },
+        )
     }
     val shape = RoundedCornerShape(24.dp)
     val create = {
@@ -174,21 +185,9 @@ fun CreatePlaylistDialog(
                         modifier = Modifier.focusRequester(focus),
                     )
                     if (pickCover) {
-                        Text(
-                            stringResource(
-                                if (cover == null && existing == null) R.string.choose_cover else R.string.change_cover,
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = InkDim,
-                            modifier = Modifier
-                                .padding(top = 8.dp)
-                                .clip(RoundedCornerShape(50))
-                                .clickable(enabled = !busy) {
-                                    pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                }
-                                .padding(horizontal = 4.dp, vertical = 2.dp),
-                        )
-                        // Square Fusion: back to the source's cover, once one was chosen here.
+                        // Square Fusion: the cover beside the name is what picks one;
+                        // the line repeating it here is gone.
+                        // Back to the source's cover, once one was chosen here.
                         if ((customCover || cover != null) && !resetCover) {
                             Text(
                                 stringResource(R.string.fusion_original_cover),
@@ -196,6 +195,7 @@ fun CreatePlaylistDialog(
                                 color = InkDim,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(50))
+                                    .padding(top = 8.dp)
                                     .clickable(enabled = !busy) {
                                         cover = null
                                         resetCover = customCover

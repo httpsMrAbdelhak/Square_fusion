@@ -121,8 +121,21 @@ internal fun ProfilePhotoSection(name: String?) {
     val scope = rememberCoroutineScope()
     val photo = rememberProfilePhoto()
     val custom by dev.lelonio.square.fusion.ProfilePhoto.custom.collectAsStateWithLifecycle()
+    // The picture picked is framed first, in the circle it is shown in.
+    var framing by remember { mutableStateOf<android.net.Uri?>(null) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked ->
-        if (picked != null) scope.launch { dev.lelonio.square.fusion.ProfilePhoto.set(context, picked) }
+        if (picked != null) framing = picked
+    }
+    framing?.let { picked ->
+        dev.lelonio.square.ui.components.ImageCropDialog(
+            source = picked,
+            shape = dev.lelonio.square.ui.components.CropShape.CIRCLE,
+            onCropped = { cropped ->
+                framing = null
+                scope.launch { dev.lelonio.square.fusion.ProfilePhoto.set(context, cropped) }
+            },
+            onDismiss = { framing = null },
+        )
     }
     val choose = {
         pick.launch(

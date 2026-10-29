@@ -1541,12 +1541,12 @@ private fun Greeting(name: String) {
         1 -> if (who != null) stringResource(R.string.fusion_greeting_afternoon_name, who) else stringResource(R.string.fusion_greeting_afternoon)
         else -> if (who != null) stringResource(R.string.fusion_greeting_evening_name, who) else stringResource(R.string.fusion_greeting_evening)
     }
-    Text(
+    // Whole on one line: smaller for a long name or a narrow screen, never cut.
+    dev.lelonio.square.ui.components.FitText(
         text,
         style = MaterialTheme.typography.titleLarge,
         fontWeight = FontWeight.Bold,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+        minScale = 0.55f,
     )
 }
 

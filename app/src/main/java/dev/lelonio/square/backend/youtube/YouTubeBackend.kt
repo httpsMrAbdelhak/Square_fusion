@@ -183,7 +183,7 @@ class YouTubeBackend(private val account: YouTubeAccount) : MusicBackend {
             .getOrThrow()
             .items
             .filterIsInstance<PlaylistItem>()
-            .onEach { if (it.isEditable || it.id == LIKED_MUSIC_ID) editable.add(it.id) }
+            .onEach { if (isOwn(it)) editable.add(it.id) }
             .map { item ->
                 CatalogPlaylist(
                     uri = "$PLAYLIST_PREFIX${item.id}",
@@ -871,7 +871,7 @@ class YouTubeBackend(private val account: YouTubeAccount) : MusicBackend {
             .getOrThrow()
             .items
             .filterIsInstance<PlaylistItem>()
-            .filter { it.isEditable || it.id == LIKED_MUSIC_ID }
+            .filter(::isOwn)
             // Liked songs first, as the other source puts its own.
             .sortedBy { if (it.id == LIKED_MUSIC_ID) 0 else 1 }
             .map { item ->
@@ -881,6 +881,17 @@ class YouTubeBackend(private val account: YouTubeAccount) : MusicBackend {
                     artworkUrl = item.thumbnail?.atSize(COVER_SIZE),
                 )
             }
+    }
+
+    /**
+     * Square Fusion: a playlist of the library the account may add to. YouTube
+     * Music stopped marking them in the library's menu, which left only Liked
+     * Music to add to; the author being the account says the same thing.
+     */
+    private fun isOwn(item: PlaylistItem): Boolean {
+        if (item.isEditable || item.id == LIKED_MUSIC_ID) return true
+        val me = account.accountName.value?.trim()?.takeIf { it.isNotEmpty() } ?: return false
+        return item.author?.name?.trim().equals(me, ignoreCase = true)
     }
 
     override suspend fun addToPlaylist(playlistUri: String, trackUri: String) {

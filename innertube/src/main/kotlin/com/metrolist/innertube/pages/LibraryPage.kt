@@ -62,8 +62,12 @@ data class LibraryPage(
                     radioEndpoint = renderer.menu?.menuRenderer?.items?.find {
                         it.menuNavigationItemRenderer?.icon?.iconType == "MIX"
                     }?.menuNavigationItemRenderer?.navigationEndpoint?.watchPlaylistEndpoint,
+                    // LOCAL CHANGE: or "DELETE", which only the owner's own lists
+                    // offer; YouTube Music stopped sending "EDIT" in this menu.
                     isEditable = renderer.menu?.menuRenderer?.items?.find {
-                        it.menuNavigationItemRenderer?.icon?.iconType == "EDIT"
+                        it.menuNavigationItemRenderer?.icon?.iconType == "EDIT" ||
+                            it.menuNavigationItemRenderer?.icon?.iconType == "DELETE" ||
+                            it.menuServiceItemRenderer?.icon?.iconType == "DELETE"
                     } != null
                 )
 

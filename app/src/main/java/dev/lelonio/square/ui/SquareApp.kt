@@ -2154,7 +2154,7 @@ fun SquareApp(
                                         )
                                     },
                                     onAddToPlaylist = { track ->
-                                        viewModel.openAddToPlaylist(track.uri, track.name)
+                                        viewModel.openAddToPlaylist(track.uri, track.name, track = track)
                                     },
                                     onTrackMenu = { track ->
                                         trackMenu = TrackMenuRequest(
@@ -3445,17 +3445,6 @@ fun SquareApp(
                         // Pinning is about where a row sits in the library, so
                         // it is offered for what is in the library. A playlist
                         // you are only looking at has no row to move.
-                        // Square Fusion: a playlist imported from a Spotify link leaves the Library here.
-                        val importedId = dev.lelonio.square.fusion.spotify.SpotifyLibraryStore.playlistIdOf(shownPlaylist.uri)
-                            ?.takeIf { dev.lelonio.square.fusion.spotify.SpotifyLibraryStore.playlist(it)?.imported == true }
-                        if (importedId != null) TrackSheetAction(
-                            stringResource(R.string.remove_from_library),
-                            PhosphorIcons.Regular.Trash,
-                            destructive = true,
-                        ) {
-                            dev.lelonio.square.fusion.spotify.SpotifyLibraryStore.removeImported(importedId)
-                            playlistMenu = null
-                        }
                         if (playlistMenuSaved) TrackSheetAction(
                             stringResource(if (isPinned) R.string.unpin else R.string.pin),
                             PhosphorIcons.Regular.PushPin,
@@ -3492,20 +3481,6 @@ fun SquareApp(
                         ) {
                             viewModel.openEditPlaylist(shownPlaylist)
                             playlistMenu = null
-                        }
-                        // The whole playlist in one link. yt-dlp and the apps
-                        // built on it expand a playlist URL themselves, so this
-                        // is the entire "download an album" feature.
-                        if (backend == dev.lelonio.square.backend.BackendId.YOUTUBE_MUSIC) {
-                            val label = if (downloaderInstalled(context)) {
-                                stringResource(R.string.download_with)
-                            } else {
-                                stringResource(R.string.download_get_app)
-                            }
-                            TrackSheetAction(label, PhosphorIcons.Regular.Download) {
-                                playlistMenu = null
-                                sendForDownload(context, shownPlaylist.openLink())
-                            }
                         }
                         // Keeping the page on the phone lives here rather
                         // than under the cover: the reference has no button for
@@ -3577,7 +3552,11 @@ fun SquareApp(
                                 ),
                             )
                         }
-                        if (editable) TrackSheetAction(
+                        // Square Fusion: a Spotify playlist of the account is not deleted
+                        // from here; one imported from a link is, from the Library.
+                        val deletable = editable && dev.lelonio.square.fusion.spotify.SpotifyLibraryStore.playlistIdOf(shownPlaylist.uri)
+                            .let { id -> id == null || dev.lelonio.square.fusion.spotify.SpotifyLibraryStore.playlist(id)?.imported == true }
+                        if (deletable) TrackSheetAction(
                             stringResource(R.string.delete),
                             PhosphorIcons.Regular.Trash,
                             destructive = true,
@@ -3755,7 +3734,7 @@ fun SquareApp(
                         ) {
                             TrackSheetAction(stringResource(R.string.add_to_playlist), PhosphorIcons.Regular.Plus) {
                                 trackMenu = null
-                                viewModel.openAddToPlaylist(menu.track.uri, menu.track.name)
+                                viewModel.openAddToPlaylist(menu.track.uri, menu.track.name, track = menu.track)
                             }
                         }
                         TrackSheetAction(stringResource(R.string.go_to_artist), PhosphorIcons.Regular.User) {
@@ -3862,24 +3841,6 @@ fun SquareApp(
                             clipboard.setText(AnnotatedString(menu.track.openLink()))
                         }
 
-                        // YouTube only. A Spotify link handed to a downloader
-                        // is a link it cannot do anything with, so offering the
-                        // action there would be offering a failure.
-                        if (backend == dev.lelonio.square.backend.BackendId.YOUTUBE_MUSIC) {
-                            // Says which app it will open, and says the other
-                            // thing when there is no app to open: a row that
-                            // promised a download and delivered a web page
-                            // would be the entry lying about what it does.
-                            val label = if (downloaderInstalled(context)) {
-                                stringResource(R.string.download_with)
-                            } else {
-                                stringResource(R.string.download_get_app)
-                            }
-                            TrackSheetAction(label, PhosphorIcons.Regular.Download) {
-                                trackMenu = null
-                                sendForDownload(context, menu.track.openLink())
-                            }
-                        }
                         if (menu.removable) {
                             TrackSheetAction(
                                 stringResource(R.string.remove_from_playlist),
@@ -3933,7 +3894,7 @@ fun SquareApp(
                     onAddToPlaylist = {
                         val track = sharedTrack ?: return@SharedTrackCard
                         sharedTrack = null
-                        viewModel.openAddToPlaylist(track.uri, track.name)
+                        viewModel.openAddToPlaylist(track.uri, track.name, track = track)
                     },
                     onDismiss = { sharedTrack = null },
                 )
