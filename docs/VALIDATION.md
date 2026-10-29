@@ -136,6 +136,22 @@ lecteur sur Android 11, la rapidité des menus sur un téléphone Android 11 ré
 (l'émulateur mesure ~1,5 s dont l'essentiel est le temps de lecture de l'écran
 par l'outil de test), le contenu réellement proposé par YouTube pour un pays.
 
+### Ajouts « animation BitChord, pochettes, durées, Nouveautés, pays »
+| Étape | Résultat |
+|---|---|
+| Barre › lecteur ouvert ; flèche › fermé dans la barre ; glissement vers le bas › fermé ; glissement court › revient ouvert ; trois ouvertures-fermetures rapides › fin dans la barre | OK (émulateur, enregistrement `motion.mp4` dans les résultats de test) |
+| Clip YouTube Music : pochette du titre cherchée parmi les titres YouTube Music (ex. « positions (official video) » › titre sur l'album « Positions ») | OK (journal) |
+| Pays Algérie puis France : YouTube Music interrogé avec DZ puis FR, onglet Nouveautés rechargé | OK (journal) ; contenu propre à chaque pays non démontré |
+| Unitaires : éditions Apple (« The Middle » ≠ « The Middle (Remixes) »), clip ↔ titre (« Justin Bieber - Company ») | OK |
+| Instrumentés (16) : durée lue dans un fichier téléchargé sans durée, « The Middle » = le disque si Apple répond | OK |
+| Non-régression : menus, renommage, ajout aux playlists, À propos, podcasts, recherche | OK |
+
+Non vérifiable ici : la fluidité réelle de l'animation (l'émulateur dessine
+en logiciel, ~500 ms par image ; seule la suite des positions est visible dans
+l'enregistrement), la lecture réelle, la durée après un vrai téléchargement
+(YouTube refuse les flux à l'émulateur), le Canvas Spotify (aucun compte
+Spotify connecté), le mode Apple Music de bout en bout.
+
 ## 4. À vérifier sur votre téléphone
 - Lecture réelle d'un titre Spotify via YouTube Music, suivant / précédent /
   aléatoire / répétition dans une playlist importée.
