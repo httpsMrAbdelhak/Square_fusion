@@ -360,6 +360,34 @@ class YouTubeBackend(private val account: YouTubeAccount) : MusicBackend {
     }
 
     /**
+     * Square Fusion: this year's records by [artistUris] — the artists the
+     * listener plays most — read off their own YouTube Music pages, newest
+     * first. Last year's too in January and February, when this year has
+     * barely begun. Nothing is ranked or invented: what the pages list, with
+     * the year they give, and nothing for an artist whose page could not be read.
+     */
+    suspend fun recentReleases(artistUris: List<String>): List<CatalogPlaylist> = withContext(Dispatchers.IO) {
+        val today = java.time.LocalDate.now()
+        val since = if (today.monthValue <= 2) today.year - 1 else today.year
+        val pages = coroutineScope {
+            artistUris.map { uri ->
+                async {
+                    runCatching { YouTube.artist(uri.removePrefix(ARTIST_PREFIX)).getOrThrow() }
+                        .onFailure { android.util.Log.w(LOG_TAG, "artist page unavailable: $it") }
+                        .getOrNull()
+                }
+            }.awaitAll()
+        }
+        pages.filterNotNull()
+            .flatMap { page -> page.sections.flatMap { it.items }.filterIsInstance<AlbumItem>() }
+            .filter { (it.year ?: 0) >= since }
+            .distinctBy { it.browseId }
+            .sortedByDescending { it.year ?: 0 }
+            .take(RECENT_RELEASES)
+            .mapNotNull(::toCatalogPlaylist)
+    }
+
+    /**
      * The Radio tab: YouTube Music's moods and genres, a row of lists each.
      *
      * What the service itself files as stations to put on, rather than records
@@ -979,6 +1007,9 @@ class YouTubeBackend(private val account: YouTubeAccount) : MusicBackend {
         private const val SHOW_ID_PREFIX = "MPSP"
         const val PLAYLIST_PREFIX = "ytmusic:playlist:"
         const val ARTIST_PREFIX = "ytmusic:artist:"
+
+        /** How many of the listener's artists' new records the New tab shows. */
+        private const val RECENT_RELEASES = 20
         const val ALBUM_PREFIX = "ytmusic:album:"
         /** A video played as one, picture and all, whatever the video button says. */
         const val VIDEO_PREFIX = "ytmusic:video:"

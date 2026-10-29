@@ -525,6 +525,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var youtubeHomeJob: Job? = null
 
     /** One of the other two tabs when the source is not Spotify; see [MusicBackend.newRows]. */
+    private val YOUR_ARTISTS = 6
+
     data class SourceRowsState(
         val rows: List<HomeRow> = emptyList(),
         val loading: Boolean = false,
@@ -546,9 +548,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (sourceNewJob?.isActive == true || _sourceNew.value.rows.isNotEmpty()) return
         _sourceNew.value = _sourceNew.value.copy(loading = true)
         sourceNewJob = viewModelScope.launch {
-            val rows = runCatching { container.activeBackend.newRows() }.getOrDefault(emptyList())
+            val shared = async { runCatching { container.activeBackend.newRows() }.getOrDefault(emptyList()) }
+            // Square Fusion: first, this year's records by the artists played
+            // most here, from their own pages; see YouTubeBackend.recentReleases.
+            val mine = async { yourArtistsReleases() }
+            val rows = listOfNotNull(mine.await()) + shared.await()
             _sourceNew.value = SourceRowsState(rows = rows, loading = false)
         }
+    }
+
+    /**
+     * Square Fusion: a row of the new records by the artists in this phone's
+     * listening history, the most played first; null without enough history
+     * or with nothing new from them.
+     */
+    private suspend fun yourArtistsReleases(): HomeRow? {
+        if (container.activeBackend.id != BackendId.YOUTUBE_MUSIC) return null
+        val artists = container.recentStore.tracks.value
+            .flatMap { track -> track.artists.mapNotNull { it.uri }.ifEmpty { listOfNotNull(track.artistUri) } }
+            .filter { it.startsWith(dev.lelonio.square.backend.youtube.YouTubeBackend.ARTIST_PREFIX) }
+            .groupingBy { it }.eachCount()
+            .entries.sortedByDescending { it.value }
+            .take(YOUR_ARTISTS)
+            .map { it.key }
+        if (artists.isEmpty()) return null
+        val records = runCatching { container.youtubeBackend.recentReleases(artists) }.getOrDefault(emptyList())
+        if (records.isEmpty()) return null
+        return HomeRow(title = string(R.string.fusion_new_from_your_artists), items = records)
     }
 
     /** And the Radio tab; see [loadSourceNew]. */
