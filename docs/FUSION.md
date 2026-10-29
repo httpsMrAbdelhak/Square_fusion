@@ -274,6 +274,52 @@ Glisser vers le bas, depuis le haut du contenu, fait descendre le lecteur
 avec le doigt ; relâché, il se range dans le mini-lecteur ou revient, selon
 la vitesse et la distance. La flèche utilise la même animation.
 
+### Ouverture et fermeture du lecteur (d'après BitChord)
+Repris du code de BitChord (`PlayerSheetMotion`, `PlayerDock`) : le lecteur
+glisse comme une feuille sur un ressort amorti sans rebond (raideur 195,
+environ 0,45 s), le reste du lecteur apparaît avec 15 % d'avance sur la
+pochette, et une seule pochette voyage entre la couverture du mini-lecteur et
+l'image en haut du lecteur. Elle est remise en page à chaque image, de sorte
+que le carré du mini-lecteur devienne le 3:4 du lecteur sans être étiré. Les
+deux pochettes d'origine sont masquées pendant le trajet. Bouton, flèche et
+glissement utilisent la même animation ; un glissement vers le haut ouvre au-delà
+de la moitié ou sur un geste rapide (400 dp/s), un glissement vers le bas ferme
+au-delà de 56 dp ou sur un geste rapide (125 dp/s), comme la feuille Material
+de BitChord. Avec un Canvas ou une vidéo en haut du lecteur, l'ancienne
+apparition en fondu est gardée (pas d'image à faire voyager).
+
+### Pochettes
+- La source choisie dans Paramètres › Paroles et pochettes (« Pochettes
+  animées ») décide d'où viennent les images. Spotify (Canvas) : la pochette du
+  titre lui-même (YouTube Music ou Spotify), aucune image d'Apple Music, et le
+  Canvas de Spotify pour les titres venus de Spotify, lu avec la connexion
+  Spotify. Apple Music : la grande image, la pochette et la pochette animée
+  d'Apple, pour l'édition exacte du disque seulement.
+- Causes corrigées : la recherche d'album d'Apple ignorait ce qui est entre
+  parenthèses et classait « a une grande image » avant « nom exact », d'où la
+  pochette de « The Middle (Remixes) » pour « The Middle » ; sans disque connu,
+  la recherche par titre préférait la ligne d'une autre sortie (souvent une
+  compilation) à celle du single. Les réponses gardées un mois avec ces règles
+  ne sont plus lues.
+- Clip YouTube Music : la pochette du titre est cherchée parmi les titres de
+  YouTube Music (même titre une fois « (Official Music Video) » retiré, même
+  version, même artiste) ; deux disques possibles que la durée ne départage pas
+  sont un doute, et le clip garde sa miniature. Réponse gardée.
+- Une seule pochette de référence par titre : mini-lecteur, lecteur, fond des
+  paroles, couleurs.
+
+### Nouveautés
+Rangée « Nouveautés de vos artistes » : les disques de l'année (et de l'année
+précédente en janvier-février) des six artistes les plus écoutés d'après
+l'historique de lecture du téléphone, lus sur leurs pages YouTube Music. Absente
+sans historique ou sans nouveauté.
+
+### Durées des téléchargements
+Un titre est gardé comme la liste d'où il est téléchargé le décrit ; les
+rangées de l'accueil de YouTube Music n'ont souvent pas de durée. À la fin du
+téléchargement (et au démarrage pour ceux déjà téléchargés), la durée lue dans
+le fichier est enregistrée si elle manquait.
+
 ### Android 11
 Les menus des titres et des playlists et la fenêtre « Ajouter à une
 playlist » s'ouvrent sans le flou fait à la main (Android 11 n'a pas le flou
