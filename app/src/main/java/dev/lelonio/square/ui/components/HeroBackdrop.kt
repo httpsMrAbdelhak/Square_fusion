@@ -137,6 +137,8 @@ fun HeroBackdrop(
      * same one.
      */
     zoom: Float = 1f,
+    /** Square Fusion: told whether the picture is drawn yet; see PlayerDock.playerPictureShown. */
+    onPictureShown: ((Boolean) -> Unit)? = null,
 ) {
     // Black over a dark page and white over a light one; see scrimColor.
     val scrim = dev.lelonio.square.ui.theme.scrimColor()
@@ -184,6 +186,7 @@ fun HeroBackdrop(
             cover.await()?.let { ArtSet(it, edge.await(), blur.await(), zoom) }
         }
     }
+    if (onPictureShown != null) androidx.compose.runtime.SideEffect { onPictureShown(art != null) }
     Box(modifier) {
         if (extended && artworkUrl != null) {
             PictureExtension(

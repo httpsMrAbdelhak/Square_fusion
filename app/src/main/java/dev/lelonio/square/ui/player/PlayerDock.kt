@@ -49,6 +49,13 @@ class PlayerDock {
     /** The bar's cover. */
     var miniUrl by mutableStateOf<String?>(null)
 
+    /**
+     * Whether the player's own picture is drawn yet. It reads a larger copy of
+     * its own, and until that arrives the travelling picture stays where it
+     * landed, so the top of the player is never empty in between.
+     */
+    var playerPictureShown by mutableStateOf(true)
+
     fun reportMiniArt(coordinates: LayoutCoordinates, corner: Dp) {
         miniArt = coordinates
         miniCorner = corner
@@ -80,6 +87,9 @@ class PlayerDock {
         val p = progress()
         return p > 0f && p < 1f && ready()
     }
+
+    /** Whether the travelling picture is drawn: on the way, or landed while the player's own is not in yet. */
+    fun pictureOnTop(): Boolean = docking() || (progress() >= 1f && ready() && !playerPictureShown)
 
     /**
      * The cover's rect this frame, in window pixels. It rides as much of the

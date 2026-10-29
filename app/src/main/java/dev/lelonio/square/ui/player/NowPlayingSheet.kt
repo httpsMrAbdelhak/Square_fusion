@@ -199,7 +199,7 @@ private fun DockedPicture(dock: PlayerDock) {
         Box(
             Modifier
                 .layout { measurable, constraints ->
-                    val rect = if (dock.docking()) dock.coverRect() else null
+                    val rect = if (dock.pictureOnTop()) dock.coverRect() else null
                     if (rect == null || rect.width < 1f || rect.height < 1f) {
                         val placeable = measurable.measure(Constraints.fixed(0, 0))
                         return@layout layout(0, 0) { placeable.place(0, 0) }
@@ -212,7 +212,7 @@ private fun DockedPicture(dock: PlayerDock) {
                     }
                 }
                 .graphicsLayer {
-                    alpha = if (dock.docking()) 1f else 0f
+                    alpha = if (dock.pictureOnTop()) 1f else 0f
                     shape = RoundedCornerShape(dock.coverCorner())
                     clip = true
                 },

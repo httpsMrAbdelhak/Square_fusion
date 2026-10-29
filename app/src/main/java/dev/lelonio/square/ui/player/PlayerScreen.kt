@@ -879,6 +879,9 @@ fun PlayerScreen(
                     } else {
                         1f
                     },
+                    // Square Fusion: until it is drawn, the picture that flew
+                    // in stays over it; see PlayerDock.playerPictureShown.
+                    onPictureShown = { shown -> dock?.playerPictureShown = shown },
                     modifier = Modifier.fillMaxSize(),
                 )
                 // And the light still moves, in the cover's own colours: it is

@@ -6169,13 +6169,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _nowPlayingArtPending.value = false
             return
         }
-        _nowPlayingArtPending.value = true
         // Square Fusion: the pictures come from the source chosen for covers.
         // With Spotify (Canvas) chosen, nothing is asked of Apple: the song's
         // own cover is the one, and only a music video looks further, for its
         // song's (see SpotifyMatches.songCoverForVideo).
         val appleCovers = container.preferences.animatedCoverSource.value ==
             dev.lelonio.square.data.PreferencesStore.CoverSource.APPLE_MUSIC
+        // Waited for only when what is asked may replace the picture. With
+        // Spotify chosen the song's own picture is the one, shown at once; a
+        // music video may still change over to its song's when that is found.
+        _nowPlayingArtPending.value = appleCovers || artworkUrl == null
         nowPlayingArtJob = viewModelScope.launch {
             launch {
                 delay(ART_WAIT_MS)
