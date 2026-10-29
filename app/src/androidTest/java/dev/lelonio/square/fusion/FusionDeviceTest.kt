@@ -5,6 +5,7 @@ import android.hardware.display.DisplayManager
 import android.view.Display
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import dev.lelonio.square.R
 import dev.lelonio.square.fusion.display.RefreshRates
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -133,5 +134,20 @@ class FusionDeviceTest {
         assertEquals(bitmap.width, bitmap.height)
         ProfilePhoto.clear()
         assertNull(ProfilePhoto.custom.value)
+    }
+
+    @Test
+    fun notificationIconFollowsTheChosenIcon() {
+        for (icon in AppIcon.entries + AppIcon.Square) {
+            val before = AppIcon.changed.value
+            AppIcon.apply(context, icon)
+            assertEquals(icon, AppIcon.current(context))
+            assertTrue("$icon: change announced", AppIcon.changed.value > before)
+            val drawable = context.getDrawable(icon.notificationIcon)
+            assertNotNull("$icon: notification icon loads", drawable)
+            assertTrue("$icon: notification icon has a size", drawable!!.intrinsicWidth > 0 && drawable.intrinsicHeight > 0)
+        }
+        assertEquals(R.drawable.ic_notification, AppIcon.Square.notificationIcon)
+        assertTrue(AppIcon.LiquidGlass.notificationIcon != AppIcon.Square.notificationIcon)
     }
 }

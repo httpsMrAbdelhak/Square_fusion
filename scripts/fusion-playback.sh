@@ -387,10 +387,11 @@ tap_where library2 'desc == "New playlist"' && sleep 3 \
   && { tap_where dialog3 '"EditText" in cls' || true; } \
   && adb shell input text "'$APPLE'" && sleep 1 && adb logcat -c \
   && tap_where dialog4 'text == "Import"' || { echo "FAIL could not reach the import dialog again"; fail=1; }
+apple_ok=0
 apple=$(wait_log "imported playlist am\.|spotify import failed" 90)
 shot apple
 case "$apple" in
-  *"imported playlist am."*) echo "OK   ${apple#*: }" ;;
+  *"imported playlist am."*) echo "OK   ${apple#*: }"; apple_ok=1 ;;
   *"import failed"*) echo "WARN Apple Music refused the import here: ${apple#*: }"
     adb logcat -d -s 'SquareFusion:*' | tail -n 15 | sed 's/^/LOG /' ;;
   *) echo "FAIL the Apple Music import neither finished nor failed in 90 s"; fail=1 ;;
@@ -431,6 +432,58 @@ PY
 )
   [ -n "$b" ] || return 1
   adb shell input swipe $b $b 900
+}
+# A song of the open page added to the imported Apple Music playlist: listed
+# in the sheet, then found in that playlist after a restart.
+add_to_playlist() {
+  step "add to a playlist"
+  adb shell input swipe 160 $((screen_h * 3 / 4)) 160 $((screen_h / 4)) 500; sleep 3
+  dump add-page
+  local title
+  title=$(python3 - "$OUT/add-page.xml" "$screen_h" <<'PY'
+import re, sys, html
+xml = open(sys.argv[1], encoding="utf-8").read()
+h = int(sys.argv[2])
+nodes = []
+for m in re.finditer(r'<node [^>]*>', xml):
+    n = m.group(0)
+    t = html.unescape(re.search(r'text="([^"]*)"', n).group(1))
+    d = re.search(r'content-desc="([^"]*)"', n).group(1)
+    x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n).groups())
+    nodes.append((t, d, x1, y1, x2, y2))
+more = next((n for n in nodes if n[1] == "More" and n[3] > 150 and n[5] < h * 3 // 4), None)
+if more:
+    for t, d, x1, y1, x2, y2 in nodes:
+        if t and x2 <= more[2] and more[3] <= (y1 + y2) // 2 <= more[5]:
+            print(t); break
+PY
+)
+  echo "LOG song to add: $title"
+  if ! menu_time song-add "$song_more" 'text="Add to a playlist"'; then return; fi
+  tap_where add-entry 'text == "Add to a playlist"'; sleep 6
+  dump add-sheet
+  shot add-sheet
+  grep -oE 'text="[^"]+"' "$OUT/add-sheet.xml" | head -n 12 | sed 's/^/LOG sheet /'
+  if ! grep -qE 'text="Today(&apos;|.)s Hits"' "$OUT/add-sheet.xml"; then
+    if [ "$apple_ok" = 1 ]; then echo "FAIL the imported Apple Music playlist is not offered"; fail=1; else echo "WARN no Apple Music playlist to add to (its import failed here)"; fi
+    close_menu; return
+  fi
+  echo "OK   Add to a playlist lists the imported playlists, not only Liked"
+  tap_where add-target 'text.startswith("Today") and text.endswith("s Hits")'; sleep 4
+  adb shell am force-stop "$PKG"; sleep 2
+  to_library add-lib
+  if ! tap_where add-open 'text.startswith("Today") and text.endswith("s Hits")'; then echo "WARN the Apple Music playlist is not on the Library's first screen"; return; fi
+  sleep 8
+  local i
+  for i in $(seq 1 14); do
+    dump add-check
+    if [ -n "$title" ] && grep -qF "text=\"$title\"" "$OUT/add-check.xml"; then
+      echo "OK   the song is in the Apple Music playlist after a restart"; shot add-check; return
+    fi
+    adb shell input swipe 160 $((screen_h * 3 / 4)) 160 $((screen_h / 5)) 300; sleep 1
+  done
+  shot add-check
+  echo "FAIL the added song is not in the playlist after a restart"; fail=1
 }
 step "rename a playlist"
 open_imported() {
@@ -483,6 +536,14 @@ adb shell dumpsys gfxinfo "$PKG" reset > /dev/null 2>&1
 for n in 1 2 3; do
   adb logcat -c
   menu_time "playlist-menu-$n" 'desc == "More" and y1 < 120' 'text="(Edit|Copy link)"' || break
+  if [ "$n" = 1 ]; then
+    if adb shell cat /sdcard/m.xml | grep -qE 'text="(Remove from library|Get YTDLnis|Download with YTDLnis)"'; then
+      echo "FAIL the imported playlist's menu still offers Remove from library or YTDLnis"; fail=1
+    else
+      echo "OK   imported playlist's menu: no Remove from library, no YTDLnis"
+    fi
+    adb shell cat /sdcard/m.xml | grep -q 'text="Delete"' && echo "OK   Delete still offered" || echo "WARN Delete not on the menu's first screen"
+  fi
   # The menu left open and untouched: the Android 11 blur must settle.
   sleep 5
   adb logcat -c
@@ -496,6 +557,13 @@ adb shell input swipe 160 $((screen_h * 3 / 4)) 160 $((screen_h / 4)) 500; sleep
 song_more="desc == 'More' and y1 > 150 and y2 < $((screen_h * 3 / 4))"
 for n in 1 2 3; do
   menu_time "song-menu-$n" "$song_more" 'text="(Go to artist|Copy link|Add to queue)"' || break
+  if [ "$n" = 1 ]; then
+    if adb shell cat /sdcard/m.xml | grep -qE 'text="(Get YTDLnis|Download with YTDLnis)"'; then
+      echo "FAIL the song menu still offers YTDLnis"; fail=1
+    else
+      echo "OK   song menu: no YTDLnis"
+    fi
+  fi
   close_menu
 done
 # An action from a song's menu, then the page is still usable.
@@ -517,6 +585,9 @@ if tap_where page-more 'desc == "More" and y1 < 120'; then
   fi
   if tap_where edit-menu 'text == "Edit"'; then
     sleep 3
+    dump edit-dialog
+    shot edit-dialog
+    if grep -q 'text="Change cover"' "$OUT/edit-dialog.xml"; then echo "FAIL the edit window still has Change cover"; fail=1; else echo "OK   edit window without Change cover"; fi
     tap_where edit-field '"EditText" in cls' || true
     adb shell input keyevent KEYCODE_MOVE_END
     for i in $(seq 1 40); do adb shell input keyevent KEYCODE_DEL; done
@@ -537,6 +608,7 @@ if tap_where page-more 'desc == "More" and y1 < 120'; then
     else
       echo "FAIL the name was lost on restart"; fail=1; texts restarted | head -n 15
     fi
+    add_to_playlist
   else
     echo "FAIL no Edit in the playlist's menu"; fail=1; texts edit-menu | head -n 15
   fi
@@ -544,7 +616,40 @@ else
   echo "WARN no More button on the imported playlist's page"; texts page-more | head -n 15
 fi
 
-# ── 7. Settings index and About ─────────────────────────────────────────────
+# ── 7. Titles on one line, settings index and About ─────────────────────────
+# A title node of one line: present, inside the screen, and no taller than
+# one line of its text ($3 px, measured on this emulator's density).
+one_line() {
+  python3 - "$OUT/$1.xml" "$2" "$3" <<'PY'
+import re, sys
+xml = open(sys.argv[1], encoding="utf-8").read()
+for m in re.finditer(r'<node [^>]*>', xml):
+    n = m.group(0)
+    text = re.search(r'text="([^"]*)"', n).group(1)
+    x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n).groups())
+    if eval(sys.argv[2]):
+        ok = (y2 - y1) <= int(sys.argv[3]) and x1 >= 0 and not text.endswith("…")
+        print(("OK  " if ok else "FAIL"), repr(text), "bounds", x1, y1, x2, y2)
+        break
+else:
+    print("WARN no such title:", sys.argv[2])
+PY
+}
+step "titles on one line"
+density=$(adb shell wm density | grep -oE '[0-9]+' | tail -n 1)
+to_library lib-title-nav
+dump library-title
+shot library-title
+r=$(one_line library-title 'text == "Library" and y1 < 200' $((64 * density * 13 / 10 / 160)))
+echo "$r (Library header)"; case "$r" in FAIL*) fail=1 ;; esac
+adb shell input keyevent KEYCODE_BACK; sleep 2
+tap_where home-title-nav '(text == "Home" or desc == "Home") and y1 > 400' || true
+sleep 4
+dump greeting
+shot greeting
+r=$(one_line greeting 'text.startswith("Good ")' $((28 * density * 13 / 10 / 160)))
+echo "$r (home greeting)"; case "$r" in FAIL*) fail=1 ;; esac
+
 step "settings and About"
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
 sleep 3
@@ -574,7 +679,8 @@ if tap_where avatar 'clickable and x1 > 230 and y2 < 160'; then
     sleep 4
     dump about
     shot about
-    if grep -q 'Lelonio\|ko-fi\|Support development' "$OUT/about.xml"; then echo "FAIL About still names the original developer's links"; fail=1; texts about | head -n 20; else echo "OK   About without the original developer's links"; fi
+    if grep -qi 'ko-fi\|Support development' "$OUT/about.xml"; then echo "FAIL About still has the support links"; fail=1; texts about | head -n 20; else echo "OK   About without support links"; fi
+    if grep -q 'text="Developed by"' "$OUT/about.xml" && grep -q 'Lelonio' "$OUT/about.xml"; then echo "OK   About: Developed by Lelonio"; else echo "FAIL About does not show Developed by Lelonio"; fail=1; texts about | head -n 20; fi
     grep -q 'httpsMrAbdelhak' "$OUT/about.xml" && echo "OK   About shows this repository" || echo "WARN this repository is not on the first screen of About"
   else
     echo "WARN no About tile"; texts settings | head -n 20

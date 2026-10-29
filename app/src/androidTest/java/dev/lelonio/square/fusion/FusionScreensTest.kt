@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -15,6 +16,8 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.lelonio.square.R
+import dev.lelonio.square.ui.components.CropShape
+import dev.lelonio.square.ui.components.ImageCropDialog
 import dev.lelonio.square.ui.glass.backdrop.backdrops.emptyBackdrop
 import dev.lelonio.square.ui.settings.AppIconSection
 import dev.lelonio.square.ui.settings.PerformanceSection
@@ -79,5 +82,55 @@ class FusionScreensTest {
     fun spotifySectionAsksToSignInWhenNotConnected() {
         scrolling { SpotifyFreeSection(onSignIn = {}) }
         compose.onNodeWithText(s(R.string.fusion_spotify_sign_in)).assertExists()
+    }
+
+    /** A wide picture, red on the left half and blue on the right, as a file. */
+    private fun widePicture(): android.net.Uri {
+        val bitmap = android.graphics.Bitmap.createBitmap(800, 400, android.graphics.Bitmap.Config.ARGB_8888)
+        android.graphics.Canvas(bitmap).apply {
+            drawColor(android.graphics.Color.RED)
+            drawRect(400f, 0f, 800f, 400f, android.graphics.Paint().apply { color = android.graphics.Color.BLUE })
+        }
+        val file = java.io.File(context.cacheDir, "crop-test-source.png")
+        file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        return android.net.Uri.fromFile(file)
+    }
+
+    private fun crop(shape: CropShape, confirm: Boolean): Pair<android.net.Uri?, Boolean> {
+        var result: android.net.Uri? = null
+        var dismissed = false
+        val source = widePicture()
+        compose.setContent {
+            SquareTheme {
+                ImageCropDialog(source = source, shape = shape, onCropped = { result = it }, onDismiss = { dismissed = true })
+            }
+        }
+        compose.waitForIdle()
+        Thread.sleep(1500)
+        compose.onNodeWithContentDescription(s(if (confirm) R.string.save else R.string.cancel)).performClick()
+        compose.waitUntil(10_000) { result != null || dismissed }
+        return result to dismissed
+    }
+
+    @Test
+    fun cropConfirmGivesASquareImageWithoutDistortion() {
+        for (shape in CropShape.entries) {
+            val (out, _) = crop(shape, confirm = true)
+            assertTrue("$shape: a cropped file", out != null)
+            val image = android.graphics.BitmapFactory.decodeFile(out!!.path)
+            assertTrue("$shape: square output ${image.width}x${image.height}", image.width == image.height && image.width > 0)
+            // Centred on a 2:1 picture: the square spans the middle, red then blue, not stretched.
+            val left = image.getPixel(image.width / 8, image.height / 2)
+            val right = image.getPixel(image.width * 7 / 8, image.height / 2)
+            assertTrue("$shape: red on the left", android.graphics.Color.red(left) > 200 && android.graphics.Color.blue(left) < 60)
+            assertTrue("$shape: blue on the right", android.graphics.Color.blue(right) > 200 && android.graphics.Color.red(right) < 60)
+        }
+    }
+
+    @Test
+    fun cropCancelKeepsThePreviousImage() {
+        val (out, dismissed) = crop(CropShape.SQUARE, confirm = false)
+        assertTrue(dismissed)
+        assertEquals(null, out)
     }
 }
