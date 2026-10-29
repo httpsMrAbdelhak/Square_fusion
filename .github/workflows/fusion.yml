@@ -320,6 +320,13 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && (needs.apk.outputs.same_key == 'true' || inputs.allow_new_signature)
     runs-on: ubuntu-latest
     steps:
+      # For the release notes: .github/release-notes.md and the history since
+      # the previous release.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.apk.outputs.sha }}
+          fetch-depth: 0
+
       - uses: actions/download-artifact@v4
         with:
           pattern: square-fusion-*
@@ -340,7 +347,11 @@ jobs:
         run: |
           set -euo pipefail
           tag="fusion-${{ needs.apk.outputs.build }}"
-          notes="Square Fusion $VERSION
+          # This version's own changes, which the app's update window shows
+          # (scripts/release-notes.sh); the build details only on fusion-N.
+          prev=$(gh api "repos/$GH_REPO/releases/tags/latest" --jq .target_commitish 2>/dev/null || true)
+          notes=$(scripts/release-notes.sh "$prev" "$SHA")
+          details="Square Fusion $VERSION
           Built from commit $SHA by run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           Signed with: $SIGNED_WITH
           Install square-fusion.apk (universal) or the file for your phone's ABI. It installs beside Square and does not replace it."
@@ -351,7 +362,10 @@ jobs:
           [ -f test-results.zip ] && extra="test-results.zip"
           gh release create "$tag" square-fusion*.apk SHA256SUMS.txt $extra \
             --target "$SHA" --prerelease \
-            --title "Square Fusion $VERSION" --notes "$notes"
+            --title "Square Fusion $VERSION" --notes "$notes
+
+          ---
+          $details"
           # The rolling release whose asset URLs never change; the app's
           # updater reads its title for the version and picks its ABI's APK.
           gh release delete latest --yes --cleanup-tag || true
