@@ -93,7 +93,7 @@ titres dans l'ordre, vidéos ignorées, page vide → indisponible) et de ses li
 | Photo de profil (test instrumenté) : image choisie gardée carrée, puis retirée | OK |
 | Accueil : salutation selon l'heure (« Good afternoon » à 14 h, sans compte) à la place de « Square » | OK |
 | Paramètres : plus de case « Soutenir le développement » | OK |
-| À propos : plus de lien vers le développeur d'origine ni de Ko-fi ; dépôt Square Fusion affiché | OK |
+| À propos : plus de Ko-fi ; dépôt Square Fusion affiché (la mention du développeur d'origine est revenue dans la version suivante) | OK |
 | Unitaires : heures de la salutation, codecs de la ligne de qualité, durées Spotify (`trackDuration`) | OK |
 
 
@@ -119,6 +119,7 @@ titres dans l'ordre, vidéos ignorées, page vide → indisponible) et de ses li
 
 ## 5. Ce qui n'a pas été modifié
 
-Moteur ExoPlayer, `PlaybackService`, notifications, recherche, file
-d'attente, paroles, design. Les points d'accroche ajoutés dans le code de
+Moteur ExoPlayer, recherche, file d'attente, paroles, design. Dans
+`PlaybackService`, seule la petite icône de la notification a changé (elle
+suit l'icône d'application choisie). Les points d'accroche ajoutés dans le code de
 Square sont listés dans NOTICE.

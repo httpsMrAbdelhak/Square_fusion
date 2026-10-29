@@ -129,8 +129,12 @@ gardent leur qualité.
 - Maintenant le nom n'est envoyé à YouTube que pour les playlists du compte,
   comme YouTube l'indique. Ailleurs, ou si YouTube ne répond pas, le nom est
   gardé dans Square et affiché partout, sans erreur, après redémarrage aussi.
-- Pochette personnelle pour chaque playlist (sélecteur de photos d'Android),
-  et « Pochette d'origine » pour revenir à celle de la source. Elle reste sur
+- Pochette personnelle pour chaque playlist : touchez la pochette dans la
+  fenêtre de modification, choisissez une photo, puis cadrez-la (glisser pour
+  déplacer, pincer pour zoomer, double-tap pour revenir au cadrage de départ ;
+  ✓ pour valider, ✕ pour annuler sans rien changer). L'image enregistrée est
+  carrée, sans déformation. « Pochette d'origine » revient à celle de la
+  source. Elle reste sur
   le téléphone : la pochette Spotify ou YouTube n'est jamais modifiée.
 - Les playlists Spotify et Apple Music importées se modifient aussi.
 - Nom et pochette personnels sont posés par-dessus les données de la source :
@@ -138,7 +142,8 @@ gardent leur qualité.
   en dessous, sans jamais écraser le choix fait dans Square.
 
 ### Qualité affichée pendant la lecture
-Sous la barre de progression, entre les deux temps : le codec réellement
+Sous la barre de progression, entre les deux temps, dans une petite pastille
+Liquid Glass : le codec réellement
 entré dans le décodeur pour le titre en cours (AAC, Opus…) et le débit, qui
 est :
 - pour un titre téléchargé, celui du fichier lu (taille ÷ durée), mesuré ;
@@ -151,10 +156,12 @@ reçu le flux.
 - En haut à gauche, à côté du logo : « Bonjour », « Bon après-midi » ou
   « Bonsoir » selon l'heure du téléphone (5 h–12 h, 12 h–18 h, ensuite),
   suivi du nom du compte YouTube connecté ; sans compte, la salutation seule.
-  Mise à jour chaque minute.
+  Mise à jour chaque minute. Le texte rapetisse si besoin pour tenir en
+  entier sur une ligne, sans points de suspension ; de même pour le titre
+  « Bibliothèque ».
 - Photo de profil : celle du compte YouTube connecté, ou une photo choisie
-  dans Paramètres › Compte › Photo de profil (« Utiliser la photo du compte »
-  pour revenir). Elle reste sur le téléphone ; le profil YouTube n'est pas
+  dans Paramètres › Compte › Photo de profil, puis cadrée dans un cercle
+  (« Utiliser la photo du compte » pour revenir). Elle reste sur le téléphone ; le profil YouTube n'est pas
   modifié.
 
 ### Durées des titres Spotify
@@ -168,9 +175,9 @@ ouverture.
 ### Paramètres et À propos
 - La case « Soutenir le développement » (Ko-fi du développeur d'origine) est
   retirée ; les six cases restantes sont sur trois rangées.
-- À propos : le lien GitHub et le Ko-fi du développeur d'origine sont
-  remplacés par le dépôt de Square Fusion ; « Signaler un problème » ouvre
-  ses issues. La communauté Telegram et les discussions du projet d'origine ne
+- À propos : « Développé par » et le lien GitHub du développeur d'origine
+  de Square (Lelonio), comme dans Square ; son Ko-fi est retiré.
+  « Signaler un problème » ouvre les issues de Square Fusion. La communauté Telegram et les discussions du projet d'origine ne
   sont plus listées.
 
 ### Recherche
@@ -182,6 +189,41 @@ nouvelle recherche revient à « Tout ».
 Icône Square par défaut ; 13 variantes BitChord (BitChord, Liquid Glass,
 Samsung Glass, Pixel Glass). Certains lanceurs mettent un moment à afficher le
 changement ; un raccourci épinglé avec l'ancienne icône peut disparaître.
+
+### Ajouter à une playlist
+Le menu d'un titre propose toutes les playlists où l'ajout est possible :
+- playlists YouTube Music du compte (créées par le compte, ou que YouTube
+  marque modifiables) : le titre est envoyé à YouTube ;
+- playlists importées par lien (Spotify, Apple Music) et playlists Spotify
+  synchronisées : le titre est ajouté dans Square Fusion uniquement, à la fin
+  de la liste, et gardé après redémarrage. Rien n'est envoyé à Spotify ou à
+  Apple Music, et une nouvelle synchronisation ne l'efface pas.
+Un titre déjà présent n'est pas ajouté une deuxième fois.
+
+Cause de l'ancien comportement (seul « J'aime » proposé) : YouTube n'envoie
+plus l'icône « EDIT » dans le menu des playlists de la bibliothèque, seul
+indice que Square utilisait pour savoir qu'une playlist est modifiable ; et
+les playlists Spotify ou importées n'étaient jamais proposées.
+
+### Menus
+Les menus des titres et des playlists ne proposent plus YTDLnis (les
+téléchargements de Square restent). Les playlists importées par lien n'ont
+plus « Retirer de la bibliothèque » ; « Supprimer » les retire.
+
+### Icône de la notification de lecture
+La petite icône de la notification (barre d'état, en-tête de la notification
+et, selon le téléphone, écran de verrouillage) suit l'icône d'application
+choisie : la silhouette monochrome de cette icône, comme Android l'exige pour
+une petite icône. Elle change dès qu'une autre icône est choisie, sans
+redémarrer, et reste la bonne après pause, reprise, changement de titre ou
+redémarrage de l'application. La pochette du titre reste l'image de la
+notification.
+
+Limites d'Android : la petite icône est toujours dessinée en une couleur.
+Sur Android 13 et plus, les commandes multimédias du système et le lecteur
+de l'écran de verrouillage affichent l'icône de l'application déclarée dans
+le manifeste, que l'application ne peut pas changer : elles gardent l'icône
+Square. Certains fabricants dessinent ces emplacements à leur façon.
 
 ### Performance — Paramètres › Application › Performance
 Désactivé par défaut (comportement de Square). « Choisir la fréquence » :
@@ -200,7 +242,10 @@ Bluetooth.
 Paramètres › À propos › Mises à jour : l'application lit la release `latest`
 de **ce** dépôt (jamais celles de Square), télécharge l'APK de l'architecture
 du téléphone et le remet à l'installateur d'Android, qui demande la
-confirmation. Rien n'est installé en silence. Une version plus récente
+confirmation. Rien n'est installé en silence. Les notes affichées sont
+celles de la version proposée : `.github/release-notes.md` quand il a été
+modifié depuis la version précédente, sinon la liste des changements
+(commits) depuis celle-ci (`scripts/release-notes.sh`). Une version plus récente
 s'installe par-dessus en gardant les données, si elle a la même signature.
 
 ### Suivi de Square
