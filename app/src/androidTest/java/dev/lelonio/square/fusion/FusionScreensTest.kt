@@ -112,9 +112,15 @@ class FusionScreensTest {
         return result to dismissed
     }
 
+    // One content per test: a compose rule takes setContent only once.
     @Test
-    fun cropConfirmGivesASquareImageWithoutDistortion() {
-        for (shape in CropShape.entries) {
+    fun cropSquareGivesASquareImageWithoutDistortion() = confirmedCrop(CropShape.SQUARE)
+
+    @Test
+    fun cropCircleGivesASquareImageWithoutDistortion() = confirmedCrop(CropShape.CIRCLE)
+
+    private fun confirmedCrop(shape: CropShape) {
+        run {
             val (out, _) = crop(shape, confirm = true)
             assertTrue("$shape: a cropped file", out != null)
             val image = android.graphics.BitmapFactory.decodeFile(out!!.path)

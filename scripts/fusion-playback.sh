@@ -454,13 +454,22 @@ for m in re.finditer(r'<node [^>]*>', xml):
 more = next((n for n in nodes if n[1] == "More" and n[3] > 150 and n[5] < h * 3 // 4), None)
 if more:
     for t, d, x1, y1, x2, y2 in nodes:
-        if t and x2 <= more[2] and more[3] <= (y1 + y2) // 2 <= more[5]:
+        if len(t) > 1 and x2 <= more[2] and more[3] <= (y1 + y2) // 2 <= more[5]:
             print(t); break
 PY
 )
   echo "LOG song to add: $title"
-  if ! menu_time song-add "$song_more" 'text="Add to a playlist"'; then return; fi
-  tap_where add-entry 'text == "Add to a playlist"'; sleep 6
+  sleep 5
+  if ! menu_time song-add "$song_more" 'text="(Go to artist|Copy link|Add to queue|Add to a playlist)"'; then
+    close_menu; sleep 3
+    menu_time song-add2 "$song_more" 'text="(Go to artist|Copy link|Add to queue|Add to a playlist)"' || return
+  fi
+  if ! tap_where add-entry 'text == "Add to a playlist"'; then
+    # Lower in the sheet on a short screen.
+    adb shell input swipe 160 $((screen_h * 4 / 5)) 160 $((screen_h / 3)) 400; sleep 2
+    tap_where add-entry2 'text == "Add to a playlist"' || { echo "FAIL no Add to a playlist in the song menu"; fail=1; texts add-entry2 | head -n 20; close_menu; return; }
+  fi
+  sleep 6
   dump add-sheet
   shot add-sheet
   grep -oE 'text="[^"]+"' "$OUT/add-sheet.xml" | head -n 12 | sed 's/^/LOG sheet /'
@@ -677,7 +686,13 @@ if tap_where avatar 'clickable and x1 > 230 and y2 < 160'; then
   fi
   if tap_where settings-about 'text == "About"'; then
     sleep 4
-    dump about
+    # The page may still be sliding in, and the section sits lower down.
+    for i in 1 2 3 4 5 6; do
+      dump about
+      grep -q 'text="Developed by"' "$OUT/about.xml" && break
+      sleep 2
+      [ "$i" -gt 2 ] && adb shell input swipe 160 $((screen_h * 3 / 4)) 160 $((screen_h / 4)) 400 && sleep 2
+    done
     shot about
     if grep -qi 'ko-fi\|Support development' "$OUT/about.xml"; then echo "FAIL About still has the support links"; fail=1; texts about | head -n 20; else echo "OK   About without support links"; fi
     if grep -q 'text="Developed by"' "$OUT/about.xml" && grep -q 'Lelonio' "$OUT/about.xml"; then echo "OK   About: Developed by Lelonio"; else echo "FAIL About does not show Developed by Lelonio"; fail=1; texts about | head -n 20; fi
