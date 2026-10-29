@@ -218,8 +218,12 @@ class DownloadStore(context: Context) {
                 val record = current.files[uri] ?: return@filterKeys false
                 hasAudio(uri, record)
             }
-            if (surviving.size != current.files.size) {
-                publish(current.copy(files = surviving))
+            // Square Fusion: and the songs kept without a length, given the
+            // one their file has; see withMeasuredLength.
+            var tracks = current.tracks
+            for ((uri, record) in surviving) tracks = withMeasuredLength(tracks, uri, record)
+            if (surviving.size != current.files.size || tracks != current.tracks) {
+                publish(current.copy(files = surviving, tracks = tracks))
                 save()
             }
         }
@@ -514,6 +518,7 @@ class DownloadStore(context: Context) {
                 current.copy(
                     files = current.files + (trackUri to record),
                     failures = current.failures - trackUri,
+                    tracks = withMeasuredLength(current.tracks, trackUri, record),
                 ),
             )
             _progress.value = _progress.value - trackUri
@@ -596,6 +601,37 @@ class DownloadStore(context: Context) {
     }
 
     // ------------------------------------------------------------- internals
+
+    /**
+     * Square Fusion: [tracks] with [trackUri]'s length read off its file when
+     * it was kept without one.
+     *
+     * A song is kept as the list it was downloaded from had it, and some lists
+     * carry no length at all — YouTube Music's Home shelves among them — so a
+     * song downloaded from there showed dashes for good. The file knows how
+     * long it is; nothing is made up, and a length already known is left alone.
+     */
+    private fun withMeasuredLength(
+        tracks: Map<String, CatalogTrack>,
+        trackUri: String,
+        record: FileRecord,
+    ): Map<String, CatalogTrack> {
+        val track = tracks[trackUri] ?: return tracks
+        if (track.durationMs > 0) return tracks
+        if (!trackUri.startsWith(dev.lelonio.square.backend.youtube.YouTubeBackend.TRACK_PREFIX)) return tracks
+        val file = File(File(root, YOUTUBE_DIR), "${record.trackId}.${record.format}")
+        if (!file.exists()) return tracks
+        val measured = runCatching {
+            val retriever = android.media.MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(file.absolutePath)
+                retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+            } finally {
+                retriever.release()
+            }
+        }.getOrNull()?.takeIf { it > 0 } ?: return tracks
+        return tracks + (trackUri to track.copy(durationMs = measured))
+    }
 
     private fun audioFile(trackId: String): File =
         File(File(root, "audio"), trackId.take(2)).resolve(trackId.drop(2))

@@ -734,20 +734,23 @@ private fun Header(
             dev.lelonio.square.ui.components.ProfilePicture(
                 url = avatarUrl,
                 name = name,
-                size = 46.dp,
+                // Square Fusion: the logo's own diameter beside the greeting
+                // (44dp, and the same 0.78 of it once the header folds), so
+                // the two ends of the header match.
+                size = 44.dp,
                 modifier = Modifier
                     .padding(start = 14.dp)
                     // Measured from the scroll rather than sized in
                     // composition; see the note on `collapse`.
                     .layout { measurable, _ ->
-                        val side = lerp(46.dp, 36.dp, collapse()).roundToPx()
+                        val side = lerp(44.dp, 34.dp, collapse()).roundToPx()
                         val placeable = measurable.measure(Constraints.fixed(side, side))
                         layout(side, side) { placeable.place(0, 0) }
                     }
                     .clip(CircleShape)
                     .pressable(onOpenSettings, pressedScale = 0.90f)
                     .softShadow(CircleShape, elevation = 10.dp),
-                decodeSize = 46.dp,
+                decodeSize = 44.dp,
             )
         }
 
