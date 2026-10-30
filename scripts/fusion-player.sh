@@ -54,6 +54,33 @@ for m in re.finditer(r'<node [^>]*>', xml):
         break
 PY
 }
+# The same, for the last node matching: the player's own controls come after
+# the page's in a dump, and the bar under the player has a Pause button too.
+find_last() {
+  python3 - "$OUT/$1.xml" "$2" <<'PY'
+import re, sys, html
+try:
+    xml = open(sys.argv[1], encoding="utf-8").read()
+except OSError:
+    sys.exit(0)
+rule = sys.argv[2]
+last = None
+for m in re.finditer(r'<node [^>]*>', xml):
+    n = m.group(0)
+    t = re.search(r'text="([^"]*)"', n)
+    d = re.search(r'content-desc="([^"]*)"', n)
+    b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n)
+    if not (t and d and b):
+        continue
+    text, desc = html.unescape(t.group(1)), html.unescape(d.group(1))
+    clickable = 'clickable="true"' in n
+    x1, y1, x2, y2 = map(int, b.groups())
+    if eval(rule):
+        last = ((x1 + x2) // 2, (y1 + y2) // 2)
+if last:
+    print(*last)
+PY
+}
 tap_where() {
   dump "$1"
   local b; b=$(find_node "$1" "$2")
@@ -188,7 +215,7 @@ switcher_drawn() {
   local label=$1 try png pause out
   for try in 1 2 3 4; do
     dump "$label"
-    pause=$(find_node "$label" "desc in ('Pause', 'Play') and y1 > $H // 2")
+    pause=$(find_last "$label" "desc in ('Pause', 'Play') and y1 > $H // 2")
     [ -n "$pause" ] || { sleep 2; continue; }
     png=$(shot "$label")
     out=$(python3 - "$png" "${pause#* }" "$W" "$DENSITY" <<'PY'
@@ -231,7 +258,7 @@ done
 
 # Every view, from its tab (found by position: the tabs are not exposed to
 # accessibility), named in the line above the picture.
-dump views; pause=$(find_node views "desc in ('Pause', 'Play') and y1 > $H // 2")
+dump views; pause=$(find_last views "desc in ('Pause', 'Play') and y1 > $H // 2")
 if [ -n "$pause" ]; then
   ty=$(( ${pause#* } + $(dp 77) ))
   i=0
@@ -239,7 +266,7 @@ if [ -n "$pause" ]; then
     tx=$(( W * 8 / 100 + (W * 84 / 100) * (2 * i + 1) / 10 ))
     i=$((i + 1))
     # Where the transport is now: a view can move it.
-    dump "before-$tab"; p2=$(find_node "before-$tab" "desc in ('Pause', 'Play') and y1 > $H // 2")
+    dump "before-$tab"; p2=$(find_last "before-$tab" "desc in ('Pause', 'Play') and y1 > $H // 2")
     [ -n "$p2" ] && ty=$(( ${p2#* } + $(dp 77) ))
     adb shell input tap $tx $ty; settle 2
     dump "view-$tab"; shot "view-$tab" > /dev/null
@@ -279,7 +306,7 @@ echo "LOG vibrator: $(echo "$vib" | head -n 3 | tr '\n' ' ')"
 
 # Sideways on the switcher: views change, the player stays.
 open_from_bar > /dev/null || true
-dump side; pause=$(find_node side "desc in ('Pause', 'Play') and y1 > $H // 2")
+dump side; pause=$(find_last side "desc in ('Pause', 'Play') and y1 > $H // 2")
 if [ -n "$pause" ]; then
   sy=$(( ${pause#* } + $(dp 77) ))
   adb shell input swipe $((W * 15 / 100)) $sy $((W * 85 / 100)) $sy 600; settle 2
