@@ -225,6 +225,9 @@ private fun DockedPicture(dock: PlayerDock) {
                     compositingStrategy = CompositingStrategy.Offscreen
                 }
                 .drawWithContent {
+                    // Laid out at nothing at either end of the trip: nothing
+                    // to draw, and a crop worked out on an empty box is 0 / 0.
+                    if (size.width < 1f || size.height < 1f) return@drawWithContent
                     drawContent()
                     val t = dock.progress().coerceIn(0f, 1f)
                     dock.picture()?.let { picture ->

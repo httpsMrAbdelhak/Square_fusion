@@ -973,16 +973,9 @@ fun SquareApp(
     suspend fun openPlayer() {
         if (expand.value <= 0f) {
             expand.snapTo(dev.lelonio.square.ui.player.PlayerDock.OPEN_START)
-            val start = System.nanoTime()
             playerDock.awaitReady()
-            android.util.Log.i(
-                "SquareFusion",
-                "player open: waited ${(System.nanoTime() - start) / 1_000_000} ms, " +
-                    "ready ${playerDock.ready()}, picture ${playerDock.picture() != null}",
-            )
         }
         expand.animateTo(1f, expandSpec)
-        android.util.Log.i("SquareFusion", "player open: settled at ${expand.value}")
     }
 
     // Open and standing still. Derived rather than read straight, so what

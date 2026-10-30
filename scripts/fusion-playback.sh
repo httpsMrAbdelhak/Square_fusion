@@ -914,9 +914,7 @@ rec=$!
 sleep 2
 if tap_mini motion-mini; then
   adb shell dumpsys gfxinfo "$PKG" reset > /dev/null 2>&1
-  if wait_open; then echo "OK   the bar opens the player"
-    adb logcat -d -s 'SquareFusion:*' | grep "player open" | tail -n 2 | sed 's/^/LOG /'
-  else
+  if wait_open; then echo "OK   the bar opens the player"; else
     echo "FAIL the player did not open from the bar"; fail=1
     dump motion-after-tap; shot motion-after-tap
     echo "LOG the bar as it was before the tap:"
