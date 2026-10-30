@@ -330,9 +330,80 @@ jobs:
             playback-log.txt
           if-no-files-found: ignore
 
+  # The player on a recent Android (16), where its glass is drawn for real:
+  # the panel switcher on every opening, the drag down and its threshold, and
+  # a screen recording of opens and closes of every kind (scripts/fusion-player.sh).
+  player:
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: square-fusion-*
+          merge-multiple: true
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          python3 -m pip install --quiet pillow
+
+      - name: Player on Android 16
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash -c 'set -o pipefail; bash scripts/fusion-player.sh "$(ls square-fusion-*-universal.apk | head -n 1)" 2>&1 | tee player-log.txt'
+
+      - name: Summarise player results
+        if: always()
+        run: |
+          [ -f player-log.txt ] || { echo "::warning title=player-log.txt::missing"; exit 0; }
+          level=notice
+          grep -qE "^FAIL" player-log.txt && level=error
+          grep -E "^(OK|FAIL|WARN|LOG) |^== |result" player-log.txt | head -n 150 > "$RUNNER_TEMP/lines.txt" || true
+          split -l 30 "$RUNNER_TEMP/lines.txt" "$RUNNER_TEMP/part-"
+          for part in "$RUNNER_TEMP"/part-*; do
+            [ -f "$part" ] || continue
+            msg=$(sed 's/%/%25/g' "$part" | awk '{printf "%s%%0A", $0}')
+            echo "::$level title=player-log.txt::$msg"
+            rm "$part"
+          done
+
+      # Readable without the artifact store, whatever the outcome: a
+      # prerelease named ci-debug, which is not an app release.
+      - name: Keep the recording readable
+        if: always() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          zip -qr player-results.zip player player-log.txt 2>/dev/null || true
+          [ -f player-results.zip ] || exit 0
+          gh release view ci-debug > /dev/null 2>&1 || gh release create ci-debug --prerelease \
+            --title "CI debug (not an app release)" \
+            --notes "Recording and logs of the last emulator runs. Not an app build." || true
+          gh release upload ci-debug player-results.zip --clobber || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: player-${{ needs.apk.outputs.version }}
+          path: |
+            player/
+            player-log.txt
+          if-no-files-found: ignore
+
   # Publishes only what built, passed the emulator and keeps the signing key.
   publish:
-    needs: [apk, smoke]
+    needs: [apk, smoke, player]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && (needs.apk.outputs.same_key == 'true' || inputs.allow_new_signature)
     runs-on: ubuntu-latest
     steps:
@@ -352,6 +423,11 @@ jobs:
         with:
           name: smoke-${{ needs.apk.outputs.version }}
           path: results
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: player-${{ needs.apk.outputs.version }}
+          path: results/android-16
 
       - name: Publish release
         env:
