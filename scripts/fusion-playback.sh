@@ -926,7 +926,14 @@ if tap_mini motion-mini; then
   sleep 1
   if tap_where motion-close 'desc == "Close"'; then sleep 5
     player_open && { echo "FAIL the arrow did not close the player"; fail=1; } || echo "OK   the arrow closes the player into the bar"
-  else echo "FAIL no arrow to close the player with"; fail=1; fi
+  else echo "FAIL no arrow to close the player with"; fail=1
+    # Why the app is no longer on screen, if it is not: how its process last
+    # ended, and the log of the moment.
+    adb shell dumpsys activity exit-info "$PKG" 2>/dev/null | grep -E "reason|description|timestamp|importance" | head -n 12 | sed 's/^ */LOG exit /'
+    adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | head -n 2 | sed 's/^ */LOG /'
+    adb logcat -d > "$OUT/motion-logcat.txt" 2>/dev/null
+    grep -iE "lowmemorykiller|Killing|has died|Fatal signal|FATAL|AndroidRuntime: |SquareFusion|ActivityTaskManager" "$OUT/motion-logcat.txt" | tail -n 25 | cut -c1-220 | sed 's/^/LOG /'
+  fi
   tap_mini motion-mini2; wait_open
   # A drag down from the top of the player, released low: closes.
   adb shell input swipe 160 $((screen_h / 5)) 160 $((screen_h * 9 / 10)) 450; sleep 5
