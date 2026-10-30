@@ -1122,6 +1122,14 @@ fun PlayerScreen(
                 modifier = Modifier.fillMaxSize(),
                 onDragBy = onCollapseDrag,
                 onRelease = onCollapseRelease,
+                // Square Fusion: down from the picture only, and only while it
+                // is the picture on screen. Not from the title, the transport
+                // or the tabs below it, nor from the lyrics, the queue, the
+                // effects or the credits, which have their own scrolling and
+                // their own controls; the arrow closes from anywhere.
+                closesFrom = { at ->
+                    panel == PlayerPanel.NONE && !sideways && (lowerTop <= 0f || at.y < lowerTop)
+                },
             ) {
                 Column(
                     Modifier

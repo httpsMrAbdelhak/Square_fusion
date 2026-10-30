@@ -143,7 +143,7 @@ fun HeroBackdrop(
      */
     onPictureShown: ((Boolean) -> Unit)? = null,
     /** Square Fusion: the picture as decoded, for the player's dock to fly. */
-    onPicture: ((url: String, picture: ImageBitmap, zoom: Float) -> Unit)? = null,
+    onPicture: ((url: String, picture: ImageBitmap, blur: ImageBitmap?, zoom: Float, scrim: Color) -> Unit)? = null,
     /**
      * Square Fusion: the sharp picture stands aside while the dock draws it
      * elsewhere, so it is never on screen twice. The rest of the backdrop
@@ -209,7 +209,7 @@ fun HeroBackdrop(
         }
     }
     if (onPicture != null && artworkUrl != null) {
-        art?.let { shown -> androidx.compose.runtime.SideEffect { onPicture(artworkUrl, shown.cover, shown.zoom) } }
+        art?.let { shown -> androidx.compose.runtime.SideEffect { onPicture(artworkUrl, shown.cover, shown.blur, shown.zoom, scrim) } }
     }
     Box(modifier) {
         if (extended && artworkUrl != null) {
@@ -1147,6 +1147,36 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlayerPicture(
         dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
         alpha = alpha,
         filterQuality = FilterQuality.Low,
+    )
+}
+
+/**
+ * Square Fusion: what the player draws over its picture, for the picture
+ * flying to and from the bar, so that it looks the same as the one it stands
+ * in for — [shown] of the way (all of it in place on the player, none on the
+ * bar's cover). The blurred foot first, as [HeroBackdrop] lays it over an
+ * extended picture; then the shade at its top that keeps the buttons over it
+ * legible, in the slot's own terms (the player draws it across the screen,
+ * with the picture's foot at [the slot's bottom]).
+ */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlayerPictureFinish(
+    blur: ImageBitmap?,
+    zoom: Float,
+    scrim: Color,
+    shown: Float,
+) {
+    if (shown <= 0f) return
+    if (blur != null) {
+        val stops = softening(1f - SLOT_FADE - SLOT_BLUR_LEAD, 1f - SLOT_FADE + SLOT_BLUR_TAIL, Color.Black)
+        drawRect(brush = maskedPictureBrush(blur, zoom, size, stops), alpha = shown)
+    }
+    drawRect(
+        brush = Brush.verticalGradient(
+            0f to scrim.copy(alpha = 0.20f * shown),
+            0.45f to Color.Transparent,
+            0.92f to scrim.copy(alpha = 0.05f * shown),
+            1f to scrim.copy(alpha = 0.12f * shown),
+        ),
     )
 }
 

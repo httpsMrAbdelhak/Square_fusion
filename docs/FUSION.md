@@ -270,7 +270,12 @@ retour de la connexion, il est rechargé automatiquement s'il était vide ou en
 erreur ; un accueil déjà affiché n'est pas rechargé.
 
 ### Réduction du lecteur
-Glisser vers le bas, depuis le haut du contenu, réduit le lecteur au même seuil
+Le glissement ne part que de la pochette, au-dessus du titre, quand la pochette
+est la vue affichée. Depuis le titre, les commandes et les onglets, ou avec les
+paroles, la file d'attente, les effets ou les crédits ouverts, il est laissé à
+ce qui est sous le doigt ; la flèche en haut réduit le lecteur.
+
+Glisser vers le bas réduit le lecteur au même seuil
 qu'avant les changements de Square Fusion : 110 dp de déplacement du doigt,
 avec une vibration (retour haptique « appui long ») au moment où il est
 franchi. Le lecteur suit le doigt avec une résistance : rien sur les 12
@@ -300,7 +305,11 @@ Pendant le trajet :
 - le verre du lecteur garde le reflet pris avant le trajet
   (`LocalBackdropHeldWhole`) : l'image du haut étant partie voyager, un
   rafraîchissement aurait changé le flou sous les boutons au relâchement ;
-- le bas flouté de la grande image part avec elle.
+- le bas flouté de la grande image part avec elle, et la pochette qui voyage
+  porte ce bas flouté et le voile sombre du haut du lecteur, à pleine force
+  en place et de moins en moins vers le mini-lecteur ;
+- le lecteur s'efface sur une courbe adoucie : opaque tant que le doigt le
+  tient près de sa place, effacé au même point qu'avant.
 
 À l'ouverture depuis le mini-lecteur, le lecteur est d'abord mis en page hors
 de l'écran avec son image (300 ms au plus, comme BitChord), puis glisse.

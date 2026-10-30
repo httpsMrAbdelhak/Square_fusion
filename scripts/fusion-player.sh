@@ -306,6 +306,36 @@ try_drag "a 90 dp drag held, then let go" 90 10 1 open
 try_drag "a 200 dp drag" 200 16 0 closed
 try_drag "a 200 dp drag held, then let go" 200 16 1 closed
 try_drag "a 160 dp drag in two moves" 160 2 0 closed
+
+# Only from the picture: not from the controls under it, nor with a view open.
+open_from_bar > /dev/null || true
+dump zone; zp=$(find_last zone "desc in ('Pause', 'Play') and y1 > $H // 2")
+if [ -n "$zp" ]; then
+  zy=${zp#* }
+  # From the transport, beside the play button.
+  drag $((W / 4)) "$zy" 200 16 0; settle 3
+  close_on_screen && echo "OK   a 200 dp drag from the transport leaves the player open" || { echo "FAIL a drag from the transport closed the player"; fail=1; }
+  close_on_screen || open_from_bar > /dev/null
+  # From the title, just above it.
+  drag $((W / 3)) $((zy - $(dp 110))) 200 16 0; settle 3
+  close_on_screen && echo "OK   a 200 dp drag from the title leaves the player open" || { echo "FAIL a drag from the title closed the player"; fail=1; }
+  close_on_screen || open_from_bar > /dev/null
+  # With each view open, from where the picture would be.
+  for v in 1:Lyrics 2:Queue 3:Effects 4:Credits; do
+    i=${v%%:*}; name=${v#*:}
+    dump "zone-$name"; zp=$(find_last "zone-$name" "desc in ('Pause', 'Play') and y1 > $H // 2")
+    [ -n "$zp" ] || { echo "WARN no transport to find the $name tab"; continue; }
+    adb shell input tap $(( W * 8 / 100 + (W * 84 / 100) * (2 * i + 1) / 10 )) $(( ${zp#* } + $(dp 77) )); settle 2
+    drag $DX $DY 200 16 0; settle 3
+    if close_on_screen; then echo "OK   a 200 dp drag with $name open leaves the player open"; else echo "FAIL a drag with $name open closed the player"; fail=1; open_from_bar > /dev/null; fi
+    # Back to the cover through the screen's top, then its tab.
+    adb shell input tap $((W / 2)) $((H / 8)); settle 1
+    dump "zone-back-$name"; zb=$(find_last "zone-back-$name" "desc in ('Pause', 'Play') and y1 > $H // 2")
+    [ -n "$zb" ] && adb shell input tap $(( W * 8 / 100 + (W * 84 / 100) / 10 )) $(( ${zb#* } + $(dp 77) )); settle 2
+  done
+  # And the picture still closes it.
+  try_drag "a 200 dp drag from the picture, after the views" 200 16 0 closed
+fi
 vib=$({ adb shell dumpsys vibrator_manager 2>/dev/null; adb shell dumpsys vibrator 2>/dev/null; } | grep -iE "vibrat|effect" | tail -n 4 | cut -c1-160)
 echo "LOG vibrator: $(echo "$vib" | head -n 3 | tr '\n' ' ')"
 

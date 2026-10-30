@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
 import dev.lelonio.square.ui.components.drawPlayerPicture
 import dev.lelonio.square.ui.components.softenPlayerPicture
+import dev.lelonio.square.ui.components.drawPlayerPictureFinish
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.Constraints
@@ -247,6 +248,9 @@ private fun DockedPicture(dock: PlayerDock) {
                     dock.picture()?.let { picture ->
                         val shown = (t / PLAYER_PICTURE_LEAD).coerceIn(0f, 1f)
                         drawPlayerPicture(picture, dock.playerPictureZoom, alpha = shown * shown * (3f - 2f * shown))
+                        // As the player draws over it, so the picture looks
+                        // the same leaving the player as it did in it.
+                        drawPlayerPictureFinish(dock.playerPictureBlur, dock.playerPictureZoom, dock.playerPictureScrim, t)
                     }
                     // The player's picture ends dissolving into what is under
                     // it; the bar's cover has a hard edge. One becomes the

@@ -1,6 +1,3 @@
 ## Corrections du lecteur
-- La barre des sections (pochette, paroles, file d'attente, effets, crédits) est entière à chaque ouverture du lecteur. Une couche graphique servant seulement à la décaler restait vide jusqu'à ce qu'on la touche.
-- Le glissement vers le bas retrouve son seuil d'origine : 110 dp de déplacement, avec une vibration au passage du seuil. Avant le seuil, le lecteur résiste et revient en place au relâchement ; un mouvement de côté ne réduit jamais le lecteur.
-- Pendant la réduction et l'ouverture, la flèche, la mention du haut et le bouton du clip restent au-dessus de la pochette et accompagnent le lecteur au lieu de disparaître.
-- Le mini-lecteur reste en place sous le lecteur pendant tout le trajet de la pochette.
-- Le verre du lecteur garde son reflet pendant le trajet : plus de flou qui change d'un coup au relâchement. Le bas flouté de la pochette voyage avec elle.
+- Pendant le glissement vers le bas, le lecteur garde son apparence : la pochette qui voyage porte le même voile sombre en haut et le même bas flouté que dans le lecteur, et le lecteur ne devient plus légèrement transparent dès le début du geste (le haut et les boutons ne s'éclaircissent plus).
+- Le glissement vers le bas ne réduit le lecteur que s'il part de la pochette, dans la partie haute, quand la pochette est affichée. Il est sans effet depuis le titre, les commandes et les onglets, et quand les paroles, la file d'attente, les effets ou les crédits sont ouverts : le bouton en haut du lecteur le réduit.

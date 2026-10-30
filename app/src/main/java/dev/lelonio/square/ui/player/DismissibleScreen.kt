@@ -10,6 +10,10 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -54,10 +58,17 @@ fun DismissibleScreen(
      */
     onDragBy: ((Float) -> Unit)? = null,
     onRelease: ((velocity: Float, close: Boolean) -> Unit)? = null,
+    /**
+     * Square Fusion: whether a drag starting here, in this screen's own
+     * pixels, may close it. Asked as the drag starts; a drag it refuses is
+     * left to whatever is under the finger. Content that scrolls never hands
+     * its drag on while this refuses everything.
+     */
+    closesFrom: (Offset) -> Boolean = { true },
     content: @Composable () -> Unit,
 ) {
     if (onDragBy != null && onRelease != null) {
-        FollowingScreen(onDragBy, onRelease, modifier, content)
+        FollowingScreen(onDragBy, onRelease, closesFrom, modifier, content)
         return
     }
     val haptics = LocalHapticFeedback.current
@@ -165,10 +176,12 @@ val LocalDismissLock = staticCompositionLocalOf<MutableState<Boolean>> { mutable
 private fun FollowingScreen(
     onDragBy: (Float) -> Unit,
     onRelease: (velocity: Float, close: Boolean) -> Unit,
+    closesFrom: (Offset) -> Boolean,
     modifier: Modifier,
     content: @Composable () -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
+    val allowed by androidx.compose.runtime.rememberUpdatedState(closesFrom)
     val density = LocalDensity.current
     val threshold = with(density) { DISMISS_THRESHOLD.toPx() }
     val slack = with(density) { FOLLOW_SLACK.toPx() }
@@ -223,6 +236,9 @@ private fun FollowingScreen(
                 if (source != NestedScrollSource.UserInput) return Offset.Zero
                 // As before: only a drag that starts with the content at its top.
                 if (travel.scrolled == null) travel.scrolled = consumed.y != 0f
+                // Only content inside the part a drag may close from; see
+                // closesFrom. Scrolled content lives below it, so none does.
+                if (travel.blocked) return Offset.Zero
                 if (available.y > 0 && !lock.value && travel.scrolled == false) {
                     travel.fired = true
                     drag(available.y)
@@ -246,6 +262,14 @@ private fun FollowingScreen(
     Box(
         modifier
             .nestedScroll(connection)
+            // Where each gesture lands, seen before anything inside takes it,
+            // for the drag and for the scroll alike.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    travel.blocked = !allowed(down.position)
+                }
+            }
             .pointerInput(Unit) {
                 var sideways = false
                 var judged = false
@@ -279,7 +303,7 @@ private fun FollowingScreen(
                         val down = kotlin.math.abs(change.position.y - start.y)
                         sideways = across > down
                     }
-                    if (sideways || lock.value) return@detectVerticalDragGestures
+                    if (sideways || travel.blocked || lock.value) return@detectVerticalDragGestures
                     // The finger's own path, not its place on a screen that
                     // moves under it as the player closes.
                     travel.finger += amount
@@ -299,6 +323,8 @@ private class Travel {
     var fired = false
     /** Square Fusion: past the threshold, its haptic tick given. */
     var armed = false
+    /** Square Fusion: this gesture began where a drag may not close; see closesFrom. */
+    var blocked = false
     /** Square Fusion: the finger's own travel this gesture, for its speed. */
     var finger = 0f
     /** Whether this gesture began by scrolling the content; null before it moves. */

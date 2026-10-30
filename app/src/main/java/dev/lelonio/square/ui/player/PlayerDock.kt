@@ -81,9 +81,23 @@ class PlayerDock {
     var playerPictureZoom = 1f
         private set
 
-    fun reportPlayerPicture(url: String, picture: ImageBitmap, zoom: Float) {
+    /** The blurred foot and the shade the player draws over its picture; see drawPlayerPictureFinish. */
+    var playerPictureBlur: ImageBitmap? = null
+        private set
+    var playerPictureScrim = androidx.compose.ui.graphics.Color.Black
+        private set
+
+    fun reportPlayerPicture(
+        url: String,
+        picture: ImageBitmap,
+        blur: ImageBitmap?,
+        zoom: Float,
+        scrim: androidx.compose.ui.graphics.Color,
+    ) {
         playerPictureUrl = url
         playerPictureZoom = zoom
+        playerPictureBlur = blur
+        playerPictureScrim = scrim
         playerPicture = picture
     }
 
@@ -167,8 +181,15 @@ class PlayerDock {
     fun coverCorner(): Dp = miniCorner * (1f - progress().coerceIn(0f, 1f))
 
     /** The rest of the player gets out of the way a little ahead of the cover. */
-    fun contentAlpha(): Float =
-        ((progress() - DOCK_FADE_LEAD) / (1f - DOCK_FADE_LEAD)).coerceIn(DOCK_FADE_FLOOR, 1f)
+    fun contentAlpha(): Float {
+        val linear = ((progress() - DOCK_FADE_LEAD) / (1f - DOCK_FADE_LEAD)).coerceIn(0f, 1f)
+        // Eased out rather than straight: the player stays as it is while a
+        // finger holds it near open, where straight it was already a few
+        // percent see-through, enough for a light page behind to pale the
+        // top of the player and its buttons. Gone at the same point as before.
+        val remaining = 1f - linear
+        return (1f - remaining * remaining).coerceAtLeast(DOCK_FADE_FLOOR)
+    }
 
     private fun LayoutCoordinates.windowRect(): Rect? {
         if (!isAttached) return null
