@@ -6,15 +6,20 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Square Fusion: the two ends of the cover's trip between the now-playing bar
@@ -34,14 +39,16 @@ class PlayerDock {
     /** 0 on the bar, 1 open: the same value the player's sheet runs on. */
     var progress: () -> Float = { 0f }
 
-    private var miniArt: LayoutCoordinates? = null
+    // State, so an open can wait for both ends to be placed (see awaitReady);
+    // reported again on every placement with the same object, which is no change.
+    private var miniArt by mutableStateOf<LayoutCoordinates?>(null)
     private var miniCorner: Dp = 9.dp
 
     /** The player's picture slot; read live, since the sheet moves it every frame. */
-    private var playerArt: LayoutCoordinates? = null
+    private var playerArt by mutableStateOf<LayoutCoordinates?>(null)
 
     /** How far the sheet travels from open to gone, in pixels. */
-    var travel = 0f
+    var travel by mutableFloatStateOf(0f)
 
     /** The picture at the top of the player, if it shows one; null with a Canvas or a video there. */
     var playerUrl by mutableStateOf<String?>(null)
@@ -55,6 +62,40 @@ class PlayerDock {
      * landed, so the top of the player is never empty in between.
      */
     var playerPictureShown by mutableStateOf(true)
+
+    /**
+     * The player's picture itself, as it decoded and draws it, with the url it
+     * is for and its enlargement. What flies is this very bitmap, never a copy
+     * loaded for the trip: a picture loaded on the way is a hole for a frame or
+     * two, which is the blink. Kept after the player closes, so the next open
+     * of the same track flies it from its first frame.
+     */
+    var playerPicture by mutableStateOf<ImageBitmap?>(null)
+        private set
+    var playerPictureUrl: String? = null
+        private set
+    var playerPictureZoom = 1f
+        private set
+
+    fun reportPlayerPicture(url: String, picture: ImageBitmap, zoom: Float) {
+        playerPictureUrl = url
+        playerPictureZoom = zoom
+        playerPicture = picture
+    }
+
+    /** The player's picture, if it is the one the player is about to show. */
+    fun picture(): ImageBitmap? = playerPicture?.takeIf { playerPictureUrl == playerUrl }
+
+    /**
+     * Before an open from the bar: until the player is laid out and its picture
+     * is in hand, a slide started would happen to nothing, then jump (BitChord
+     * waits for its sheet the same way). Never longer than [LAYOUT_WAIT_MS].
+     */
+    suspend fun awaitReady() {
+        withTimeoutOrNull(LAYOUT_WAIT_MS) {
+            snapshotFlow { ready() && picture() != null }.first { it }
+        }
+    }
 
     fun reportMiniArt(coordinates: LayoutCoordinates, corner: Dp) {
         miniArt = coordinates
@@ -126,6 +167,12 @@ class PlayerDock {
     companion object {
         /** BitChord's: how far into the trip the rest of the player starts to show. */
         const val DOCK_FADE_LEAD = 0.15f
+
+        /** BitChord's: how long an open waits for the player to be laid out. */
+        const val LAYOUT_WAIT_MS = 300L
+
+        /** Where an open from the bar starts: the player composed, still out of sight. */
+        const val OPEN_START = 0.002f
 
         /** Never quite zero, so the faded player keeps drawing. */
         const val DOCK_FADE_FLOOR = 1f / 255f

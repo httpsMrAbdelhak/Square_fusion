@@ -137,8 +137,19 @@ fun HeroBackdrop(
      * same one.
      */
     zoom: Float = 1f,
-    /** Square Fusion: told whether the picture is drawn yet; see PlayerDock.playerPictureShown. */
+    /**
+     * Square Fusion: told whether the picture is drawn yet, once it has come
+     * all the way up; see PlayerDock.playerPictureShown.
+     */
     onPictureShown: ((Boolean) -> Unit)? = null,
+    /** Square Fusion: the picture as decoded, for the player's dock to fly. */
+    onPicture: ((url: String, picture: ImageBitmap, zoom: Float) -> Unit)? = null,
+    /**
+     * Square Fusion: the sharp picture stands aside while the dock draws it
+     * elsewhere, so it is never on screen twice. The rest of the backdrop
+     * stays, fading with the player.
+     */
+    pictureHidden: () -> Boolean = { false },
 ) {
     // Black over a dark page and white over a light one; see scrimColor.
     val scrim = dev.lelonio.square.ui.theme.scrimColor()
@@ -186,7 +197,20 @@ fun HeroBackdrop(
             cover.await()?.let { ArtSet(it, edge.await(), blur.await(), zoom) }
         }
     }
-    if (onPictureShown != null) androidx.compose.runtime.SideEffect { onPictureShown(art != null) }
+    if (onPictureShown != null) {
+        if (art == null) androidx.compose.runtime.SideEffect { onPictureShown(false) }
+        // Not until the crossfade below has brought it all the way up: told
+        // as it starts, the picture over it went and left it half there.
+        LaunchedEffect(art != null) {
+            if (art != null) {
+                kotlinx.coroutines.delay(SWAP_MS.toLong())
+                onPictureShown(true)
+            }
+        }
+    }
+    if (onPicture != null && artworkUrl != null) {
+        art?.let { shown -> androidx.compose.runtime.SideEffect { onPicture(artworkUrl, shown.cover, shown.zoom) } }
+    }
     Box(modifier) {
         if (extended && artworkUrl != null) {
             PictureExtension(
@@ -252,7 +276,7 @@ fun HeroBackdrop(
                     },
                 ),
         ) {
-        CoverFill(art = art, modifier = Modifier.fillMaxSize())
+        CoverFill(art = art, modifier = Modifier.fillMaxSize().graphicsLayer { alpha = if (pictureHidden()) 0f else 1f })
 
         // The moving cover over the still one, which stays underneath as what is
         // shown until the first frame arrives.
@@ -1105,6 +1129,36 @@ private fun maskedPictureBrush(
  * Draws [image] filling this area, cropped at the sides or the top and bottom
  * to its shape and centred, the way ContentScale.Crop lays out the still.
  */
+/** Square Fusion: the player's picture with [HeroBackdrop]'s own crop, for the picture flying to and from the bar. */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlayerPicture(
+    image: ImageBitmap,
+    zoom: Float,
+    alpha: Float,
+) {
+    val shown = croppedTo(image.width, image.height, size.width / size.height, zoom)
+    drawImage(
+        image = image,
+        srcOffset = shown.topLeft,
+        srcSize = shown.size,
+        dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+        alpha = alpha,
+        filterQuality = FilterQuality.Low,
+    )
+}
+
+/**
+ * Square Fusion: the extended picture's own dissolve at its bottom edge,
+ * [softened] of the way: none on the bar's square cover, all of it in place
+ * on the player. Erases what is drawn under it, so it needs a layer of its own.
+ */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.softenPlayerPicture(softened: Float) {
+    if (softened <= 0f) return
+    val stops = fading(1f - SLOT_FADE, 1f).map { (at, color) ->
+        at to Color.Black.copy(alpha = 1f - (1f - color.alpha) * softened)
+    }
+    drawRect(brush = Brush.verticalGradient(*stops.toTypedArray()), blendMode = BlendMode.DstIn)
+}
+
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCropped(
     image: ImageBitmap,
     zoom: Float = 1f,

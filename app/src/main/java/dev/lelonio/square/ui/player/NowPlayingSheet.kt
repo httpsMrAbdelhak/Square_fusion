@@ -18,6 +18,9 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.draw.drawWithContent
+import dev.lelonio.square.ui.components.drawPlayerPicture
+import dev.lelonio.square.ui.components.softenPlayerPicture
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.Constraints
@@ -177,15 +180,18 @@ fun NowPlayingSheet(
  * drawn over both while it is on its way and nowhere at either end. Laid out
  * afresh each frame at the dock's rect, so the crop follows the shape — the
  * bar's square becoming the player's three by four — rather than a fixed image
- * being scaled. The bar's picture and the player's are both drawn, the player's
- * coming up as it arrives, so a track whose player shows a taller picture of
- * its own changes over on the way rather than at either end.
+ * being scaled.
+ *
+ * Nothing in it loads on the way, which is what made it blink: the player's
+ * picture is the bitmap the player itself decoded (see PlayerDock.picture),
+ * and the bar's cover under it is composed the whole time the bar is up, at
+ * the bar's own decode, so it is in hand from the first frame of a trip. The
+ * player's comes up over the bar's in the first stretch out of the bar, which
+ * is where the two can differ; the same picture twice changes nothing.
  */
 @Composable
 private fun DockedPicture(dock: PlayerDock) {
-    val miniUrl = dock.miniUrl
-    val playerUrl = dock.playerUrl
-    if (miniUrl == null || playerUrl == null) return
+    val miniUrl = dock.miniUrl ?: return
     val origin = remember { floatArrayOf(0f, 0f) }
     Box(
         Modifier
@@ -215,6 +221,20 @@ private fun DockedPicture(dock: PlayerDock) {
                     alpha = if (dock.pictureOnTop()) 1f else 0f
                     shape = RoundedCornerShape(dock.coverCorner())
                     clip = true
+                    // The dissolve below erases into this layer alone.
+                    compositingStrategy = CompositingStrategy.Offscreen
+                }
+                .drawWithContent {
+                    drawContent()
+                    val t = dock.progress().coerceIn(0f, 1f)
+                    dock.picture()?.let { picture ->
+                        val shown = (t / PLAYER_PICTURE_LEAD).coerceIn(0f, 1f)
+                        drawPlayerPicture(picture, dock.playerPictureZoom, alpha = shown * shown * (3f - 2f * shown))
+                    }
+                    // The player's picture ends dissolving into what is under
+                    // it; the bar's cover has a hard edge. One becomes the
+                    // other on the way.
+                    softenPlayerPicture(t)
                 },
         ) {
             dev.lelonio.square.ui.components.Artwork(
@@ -228,19 +248,12 @@ private fun DockedPicture(dock: PlayerDock) {
                 crossfadeMs = 0,
                 fallback = false,
             )
-            dev.lelonio.square.ui.components.Artwork(
-                url = playerUrl,
-                title = "",
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { alpha = dock.progress().coerceIn(0f, 1f) },
-                corner = 0.dp,
-                crossfadeMs = 0,
-                fallback = false,
-            )
         }
     }
 }
+
+/** How much of the way out of the bar the player's picture takes to come up over the bar's. */
+private const val PLAYER_PICTURE_LEAD = 0.3f
 
 /** The bar's cover decode size; see FloatingMiniPlayer's ArtSize. */
 internal val MiniArtDecode = 40.dp

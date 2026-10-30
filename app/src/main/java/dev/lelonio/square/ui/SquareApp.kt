@@ -965,6 +965,18 @@ fun SquareApp(
     // of one trip; see PlayerDock.
     val playerDock = remember { dev.lelonio.square.ui.player.PlayerDock() }
     playerDock.progress = { expand.value }
+    // An open from the bar, BitChord's way: the player composed first, out of
+    // sight, and the slide started once it is laid out with its picture in
+    // hand. Started at once, the first frames of the slide ran with nothing
+    // there yet to fly and the player rising on its plain fade, then cut over
+    // to the sheet a few frames in — the blink on a tap on the bar.
+    suspend fun openPlayer() {
+        if (expand.value <= 0f) {
+            expand.snapTo(dev.lelonio.square.ui.player.PlayerDock.OPEN_START)
+            playerDock.awaitReady()
+        }
+        expand.animateTo(1f, expandSpec)
+    }
 
     // Open and standing still. Derived rather than read straight, so what
     // depends on it recomposes twice a journey instead of on every frame of
@@ -2470,7 +2482,7 @@ fun SquareApp(
                                 inline = dev.lelonio.square.ui.glass.floatingtabbar.LocalFloatingTabBarInline.current,
                                 collapseProgress = dev.lelonio.square.ui.glass.floatingtabbar.LocalFloatingTabBarCollapseProgress.current?.invoke(),
                                 onClick = {
-                                    scope.launch { expand.animateTo(1f, expandSpec) }
+                                    scope.launch { openPlayer() }
                                 },
                                 onTogglePlay = {
                                     if (remote != null) {

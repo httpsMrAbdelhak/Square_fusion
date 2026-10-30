@@ -799,8 +799,11 @@ fun PlayerScreen(
             }
 
             if (coverFade > 0f) {
-                // Stands aside while the picture flies, so it is never there twice.
-                Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (dock?.docking() == true) 0f else coverFade }) {
+                // Only the sharp picture stands aside while it flies (see
+                // HeroBackdrop's pictureHidden): the rest of the top of the
+                // player fades with the player. Taken away whole, it came back
+                // whole the moment the picture landed — the blink at the end.
+                Box(Modifier.fillMaxSize().graphicsLayer { alpha = coverFade }) {
                 // The cover, shown the way every other screen in the app shows
                 // a picture it is built around: filling the top, softening on
                 // the way down, ending on the colour taken from it. A track
@@ -882,6 +885,8 @@ fun PlayerScreen(
                     // Square Fusion: until it is drawn, the picture that flew
                     // in stays over it; see PlayerDock.playerPictureShown.
                     onPictureShown = { shown -> dock?.playerPictureShown = shown },
+                    onPicture = dock?.let { it::reportPlayerPicture },
+                    pictureHidden = { dock?.pictureOnTop() == true },
                     modifier = Modifier.fillMaxSize(),
                 )
                 // And the light still moves, in the cover's own colours: it is
