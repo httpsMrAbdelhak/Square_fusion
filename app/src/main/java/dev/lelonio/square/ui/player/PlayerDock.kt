@@ -15,6 +15,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
@@ -106,6 +110,10 @@ class PlayerDock {
         if (miniArt === coordinates) miniArt = null
     }
 
+    /** The player's controls while the picture travels; see [dockControls]. */
+    var controlsLayer: androidx.compose.ui.graphics.layer.GraphicsLayer? = null
+    var controlsAnchor: Offset? = null
+
     /** From the player's picture slot whenever it is placed. */
     fun reportPlayerArt(coordinates: LayoutCoordinates) {
         playerArt = coordinates
@@ -117,6 +125,13 @@ class PlayerDock {
 
     /** How far below fully open the sheet stands this frame, in pixels. */
     fun offset(): Float = (1f - progress().coerceIn(0f, 1f)) * travel
+
+    /**
+     * Whether the player slides as a sheet over the bar, whatever is at its
+     * top: a bar there to slide over is all it takes. Held at the bottom until
+     * it is laid out, rather than faded in from next to nothing.
+     */
+    fun slides(): Boolean = travel > 0f && miniArt?.isAttached == true && miniUrl != null
 
     /** Both ends known: the trip can be flown rather than faded. */
     fun ready(): Boolean =
@@ -191,10 +206,47 @@ class PlayerDock {
         /** A pull up from the bar is a flick from this speed on (BitChord's). */
         val PullFlingVelocity = 400.dp
 
-        /** A drag down on the player closes it past this far, or this fast (Material's sheet, as BitChord's). */
-        val CloseDistance = 56.dp
-        val CloseVelocity = 125.dp
     }
+}
+
+/**
+ * Square Fusion: the player's controls, drawn over the travelling picture
+ * rather than under it.
+ *
+ * Open, the arrow, the line above the picture, the video button and the title
+ * sit on top of the picture. The travelling picture is drawn over the whole
+ * player (it must not fade with it), and covered them for the length of every
+ * trip — the buttons at the top went the moment a drag began. So while the
+ * picture travels, the controls are recorded rather than drawn in place, and
+ * the dock draws them back over the picture, where the player stands and as
+ * faded as it is: the same layers as open, all the way to the bar.
+ * BitChord's sleeve, the other way round.
+ */
+@androidx.compose.runtime.Composable
+fun Modifier.dockControls(): Modifier {
+    val dock = LocalPlayerDock.current ?: return this
+    val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    androidx.compose.runtime.DisposableEffect(dock, layer) {
+        dock.controlsLayer = layer
+        onDispose { if (dock.controlsLayer === layer) dock.controlsLayer = null }
+    }
+    // Flips twice a trip; read straight, every frame of it redrew the controls.
+    val onTop by androidx.compose.runtime.remember(dock) {
+        androidx.compose.runtime.derivedStateOf { dock.pictureOnTop() }
+    }
+    return this
+        .onGloballyPositioned { coordinates ->
+            // Where they stand with the player open: here less the sheet's
+            // offset, which is what moves them while the sheet slides.
+            if (dock.ready()) dock.controlsAnchor = coordinates.positionInWindow() - Offset(0f, dock.offset())
+        }
+        .drawWithContent {
+            if (onTop && dock.controlsAnchor != null) {
+                layer.record { this@drawWithContent.drawContent() }
+            } else {
+                drawContent()
+            }
+        }
 }
 
 /** The dock around the player, while there is a bar for it to dock into. */

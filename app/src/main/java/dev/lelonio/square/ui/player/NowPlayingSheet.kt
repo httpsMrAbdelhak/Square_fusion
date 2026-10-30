@@ -19,6 +19,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.layer.drawLayer
 import dev.lelonio.square.ui.components.drawPlayerPicture
 import dev.lelonio.square.ui.components.softenPlayerPicture
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -106,6 +109,10 @@ fun NowPlayingSheet(
         derivedStateOf { progress.value <= 0.001f || progress.value >= 0.999f }
     }
 
+    // The player's panes, held on what they reflected before the trip while
+    // the picture they reflect is travelling; see LocalBackdropHeldWhole.
+    val heldWhole: () -> Boolean = remember(dock) { { dock?.pictureOnTop() == true } }
+
     Box(Modifier.fillMaxSize()) {
         // One spec for both directions, and the same one the tap uses: closing
         // is meant to be the opening played backwards, so nothing about the
@@ -134,7 +141,13 @@ fun NowPlayingSheet(
                     .onSizeChanged { dock?.travel = it.height.toFloat() }
                     .graphicsLayer {
                         val f = progress.value.coerceIn(0f, 1f)
-                        if (dock != null && dock.ready()) {
+                        // Never at next to no opacity while it waits to be
+                        // laid out: a layer at alpha zero is not drawn at
+                        // all, and what records itself while drawing — the
+                        // glass of the panel switcher, the controls — kept a
+                        // recording from before, and came up missing on the
+                        // next opening until touched.
+                        if (dock != null && dock.slides()) {
                             // A sheet: up from below its own height, the
                             // picture travelling separately on top.
                             translationY = dock.offset()
@@ -166,6 +179,7 @@ fun NowPlayingSheet(
                 androidx.compose.runtime.CompositionLocalProvider(
                     LocalGlassEnabled provides settled,
                     LocalPlayerSettled provides settled,
+                    dev.lelonio.square.ui.glass.backdrop.LocalBackdropHeldWhole provides heldWhole,
                 ) {
                     expandedContent()
                 }
@@ -252,6 +266,20 @@ private fun DockedPicture(dock: PlayerDock) {
                 fallback = false,
             )
         }
+        // The player's controls, back over the picture; see dockControls.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .drawBehind {
+                    if (!dock.pictureOnTop()) return@drawBehind
+                    val controls = dock.controlsLayer ?: return@drawBehind
+                    val at = dock.controlsAnchor ?: return@drawBehind
+                    translate(at.x - origin[0], at.y + dock.offset() - origin[1]) {
+                        controls.alpha = if (dock.progress() >= 1f) 1f else dock.contentAlpha()
+                        drawLayer(controls)
+                    }
+                },
+        )
     }
 }
 

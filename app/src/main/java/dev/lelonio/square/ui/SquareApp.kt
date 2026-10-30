@@ -2322,7 +2322,18 @@ fun SquareApp(
                         // player still swallows the taps meant for the
                         // transport.
                         .graphicsLayer {
-                            alpha = (1f - expand.value * 3f).coerceIn(0f, 1f) * chrome
+                            // Square Fusion: where the cover flies to and from
+                            // the bar (see PlayerDock), the bar stays where it
+                            // is under the player for the whole trip, as
+                            // BitChord's does: the player fades off it rather
+                            // than the bar coming back in the last third of
+                            // the way, after its cover had already landed.
+                            val shown = if (playerDock.ready()) {
+                                if (expand.value >= 0.999f) 0f else 1f
+                            } else {
+                                (1f - expand.value * 3f).coerceIn(0f, 1f)
+                            }
+                            alpha = shown * chrome
                         }
                         .onSizeChanged {
                             if (!tabBarScroll.isInline) {
@@ -3152,8 +3163,6 @@ fun SquareApp(
                             val collapseTravelPx = with(LocalDensity.current) {
                                 (LocalConfiguration.current.screenHeightDp.dp - MiniPlayerHeight).toPx()
                             }
-                            val closeFlingPx = with(LocalDensity.current) { dev.lelonio.square.ui.player.PlayerDock.CloseVelocity.toPx() }
-                            val closeDistancePx = with(LocalDensity.current) { dev.lelonio.square.ui.player.PlayerDock.CloseDistance.toPx() }
                             PlayerScreen(
                                 state = playerState,
                                 djSpeaking = djSpeaking,
@@ -3215,20 +3224,15 @@ fun SquareApp(
                                         if (travel > 0f) expand.snapTo((expand.value - dy / travel).coerceIn(0f, 1f))
                                     }
                                 },
-                                onCollapseRelease = { velocity ->
+                                onCollapseRelease = { velocity, close ->
                                     scope.launch {
                                         val travel = playerDock.travel.takeIf { it > 0f } ?: collapseTravelPx
-                                        // As BitChord's player sheet (Material's):
-                                        // closed past 56dp or by a flick down,
-                                        // back up by a flick up.
-                                        val target = when {
-                                            velocity >= closeFlingPx -> 0f
-                                            velocity <= -closeFlingPx -> 1f
-                                            (1f - expand.value) * travel >= closeDistancePx -> 0f
-                                            else -> 1f
-                                        }
+                                        // The gesture has decided, on the
+                                        // app's own threshold (see
+                                        // DismissibleScreen); the finger's
+                                        // speed carries into the slide.
                                         expand.animateTo(
-                                            target,
+                                            if (close) 0f else 1f,
                                             expandSpec,
                                             initialVelocity = if (travel > 0f) -velocity / travel else 0f,
                                         )

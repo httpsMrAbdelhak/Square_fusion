@@ -301,7 +301,11 @@ fun HeroBackdrop(
                 targetState = art,
                 animationSpec = tween(SWAP_MS),
                 label = "coverBlur",
-                modifier = Modifier.fillMaxSize(),
+                // Square Fusion: the blurred foot of the picture is the
+                // picture too, and goes with it; left behind, it was a blurred
+                // ghost of the cover at the top of a player whose cover was
+                // already on its way to the bar.
+                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = if (pictureHidden()) 0f else 1f },
             ) { shown ->
             val blur = shown?.blur ?: return@Crossfade
             val stops = if (fadeToPage) {

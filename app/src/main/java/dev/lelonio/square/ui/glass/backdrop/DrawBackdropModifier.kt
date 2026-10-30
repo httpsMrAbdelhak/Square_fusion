@@ -9,6 +9,7 @@
  */
 package dev.lelonio.square.ui.glass.backdrop
 
+import androidx.compose.ui.node.currentValueOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -75,6 +76,20 @@ private const val HandoverMillis = 180f
  * that the moment it catches up is not an event.
  */
 private const val HoldRefreshMillis = 110f
+
+/**
+ * Square Fusion: while this answers true, every surface under it keeps the
+ * capture it has, without the few refreshes a second a held surface otherwise
+ * takes, and however it moves with what it reflects.
+ *
+ * For the player's trip to and from the bar: the picture at the top of the
+ * player is taken out of it for the trip (it is drawn travelling instead), and
+ * the panes over it refreshed onto a player with no picture in it, then back
+ * onto the picture as it landed — the blur changing under the buttons as the
+ * finger let go. The panes move with the player, so what they reflect has not
+ * moved under them, and the capture from before the trip is the right one.
+ */
+val LocalBackdropHeldWhole = androidx.compose.runtime.staticCompositionLocalOf<() -> Boolean> { NeverFrozen }
 
 private val NeverFrozen: () -> Boolean = { false }
 
@@ -377,7 +392,8 @@ private class DrawBackdropNode(
     var frozen: () -> Boolean,
     var heldWhileMoving: () -> Boolean,
     var loopBucket: (() -> Int)?
-) : LayoutModifierNode, DrawModifierNode, GlobalPositionAwareModifierNode, ObserverModifierNode, Modifier.Node() {
+) : LayoutModifierNode, DrawModifierNode, GlobalPositionAwareModifierNode, ObserverModifierNode,
+    androidx.compose.ui.node.CompositionLocalConsumerModifierNode, Modifier.Node() {
 
     private val effectScope =
         object : BackdropEffectScopeImpl() {
@@ -594,11 +610,14 @@ private class DrawBackdropNode(
             // recordings across a fold instead of one per frame, and leaves
             // nothing at the end big enough to see.
             val now = System.nanoTime()
-            val heldLongEnough = (now - lastRecordedAt) / 1_000_000f >= HoldRefreshMillis
-            val holding = frozen() &&
+            // Square Fusion: held whole, with no refresh at all, while
+            // [LocalBackdropHeldWhole] says so — see there.
+            val heldWhole = this@DrawBackdropNode.currentValueOf(LocalBackdropHeldWhole)()
+            val heldLongEnough = !heldWhole && (now - lastRecordedAt) / 1_000_000f >= HoldRefreshMillis
+            val holding = (frozen() || heldWhole) &&
                 hasRecording &&
                 !heldLongEnough &&
-                (!geometryChanged || heldWhileMoving())
+                (!geometryChanged || heldWhileMoving() || heldWhole)
 
             // Coming out of a hold always takes a fresh capture, whether or not
             // anything else says to.

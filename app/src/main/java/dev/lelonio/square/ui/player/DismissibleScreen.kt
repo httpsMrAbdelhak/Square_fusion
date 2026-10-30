@@ -47,12 +47,13 @@ fun DismissibleScreen(
     /**
      * Square Fusion: when set, the drag moves the player's own open-to-closed
      * animation with the finger, by this many pixels (down is positive), and
-     * [onRelease] settles it with the finger's speed. The one animation the
+     * [onRelease] settles it with the finger's speed, closed or back open as
+     * the gesture decided; see FollowingScreen. The one animation the
      * button runs too, so both end the same way; no second movement of the
      * screen is added.
      */
     onDragBy: ((Float) -> Unit)? = null,
-    onRelease: ((Float) -> Unit)? = null,
+    onRelease: ((velocity: Float, close: Boolean) -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     if (onDragBy != null && onRelease != null) {
@@ -147,24 +148,72 @@ fun DismissibleScreen(
  */
 val LocalDismissLock = staticCompositionLocalOf<MutableState<Boolean>> { mutableStateOf(false) }
 
-/** Square Fusion: [DismissibleScreen] with the player following the finger. */
+/**
+ * Square Fusion: [DismissibleScreen] with the player following the finger.
+ *
+ * The same gesture as the one above, the one this app always had: nothing is
+ * decided before the finger has come [DISMISS_THRESHOLD] down, the haptic tick
+ * says so the moment it has, and wandering back up gives the distance back.
+ * What changed is that the player is held by the finger on the way, rather
+ * than standing still until the threshold and then leaving on its own: it
+ * gives a little at first — a few dp of nothing, then a third of the finger's
+ * travel, which is the resistance — and follows one for one once past the
+ * threshold. Let go short of it and the player settles back open; let go past
+ * it and it carries on to the bar with the finger's speed.
+ */
 @Composable
 private fun FollowingScreen(
     onDragBy: (Float) -> Unit,
-    onRelease: (Float) -> Unit,
+    onRelease: (velocity: Float, close: Boolean) -> Unit,
     modifier: Modifier,
     content: @Composable () -> Unit,
 ) {
+    val haptics = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    val threshold = with(density) { DISMISS_THRESHOLD.toPx() }
+    val slack = with(density) { FOLLOW_SLACK.toPx() }
+    val quickClose = with(density) { QUICK_CLOSE_VELOCITY.toPx() }
     val lock = remember { mutableStateOf(false) }
     val travel = remember { Travel() }
     val tracker = remember { androidx.compose.ui.input.pointer.util.VelocityTracker() }
+
+    // How far the player stands from open for a finger [d] down.
+    fun shown(d: Float): Float = when {
+        d <= slack -> 0f
+        d < threshold -> (d - slack) * FOLLOW_RESISTANCE
+        else -> (threshold - slack) * FOLLOW_RESISTANCE + (d - threshold)
+    }
+
+    fun drag(amount: Float) {
+        val before = travel.distance
+        travel.distance = (travel.distance + amount).coerceAtLeast(0f)
+        if (!travel.armed && travel.distance >= threshold) {
+            travel.armed = true
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        } else if (travel.armed && travel.distance < threshold) {
+            travel.armed = false
+        }
+        val moved = shown(travel.distance) - shown(before)
+        if (moved != 0f) onDragBy(moved)
+    }
+
+    fun release(velocity: Float) {
+        // Past the threshold, or thrown down hard from most of the way there;
+        // anything else is not a close.
+        val close = travel.distance >= threshold ||
+            (velocity >= quickClose && travel.distance >= threshold * QUICK_CLOSE_SHARE)
+        if (travel.distance > 0f || close) onRelease(velocity, close)
+        travel.distance = 0f
+        travel.armed = false
+        travel.fired = false
+    }
 
     val connection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 // Back up while closing: the player follows, the list stays put.
                 if (travel.fired && available.y < 0 && source == NestedScrollSource.UserInput) {
-                    onDragBy(available.y)
+                    drag(available.y)
                     return Offset(0f, available.y)
                 }
                 return Offset.Zero
@@ -176,7 +225,7 @@ private fun FollowingScreen(
                 if (travel.scrolled == null) travel.scrolled = consumed.y != 0f
                 if (available.y > 0 && !lock.value && travel.scrolled == false) {
                     travel.fired = true
-                    onDragBy(available.y)
+                    drag(available.y)
                     return Offset(0f, available.y)
                 }
                 return Offset.Zero
@@ -184,10 +233,9 @@ private fun FollowingScreen(
 
             override suspend fun onPreFling(available: Velocity): Velocity {
                 val closing = travel.fired
-                travel.fired = false
                 travel.scrolled = null
                 if (closing) {
-                    onRelease(available.y)
+                    release(available.y)
                     return available
                 }
                 return Velocity.Zero
@@ -199,25 +247,46 @@ private fun FollowingScreen(
         modifier
             .nestedScroll(connection)
             .pointerInput(Unit) {
+                var sideways = false
+                var judged = false
+                var start = Offset.Zero
                 detectVerticalDragGestures(
-                    onDragStart = { tracker.resetTracking(); travel.fired = false; travel.distance = 0f },
+                    onDragStart = { at ->
+                        start = at
+                        judged = false
+                        tracker.resetTracking()
+                        travel.distance = 0f
+                        travel.armed = false
+                        travel.fired = false
+                        travel.finger = 0f
+                        sideways = false
+                    },
                     onDragEnd = {
-                        if (travel.fired) onRelease(tracker.calculateVelocity().y)
+                        if (travel.fired) release(tracker.calculateVelocity().y)
                         travel.fired = false
                     },
                     onDragCancel = {
-                        if (travel.fired) onRelease(0f)
+                        if (travel.fired) release(0f)
                         travel.fired = false
                     },
                 ) { change, amount ->
+                    // A movement more across than down, from its start, is
+                    // someone sliding along the switcher or the cover: not
+                    // this gesture, whatever its vertical part adds up to.
+                    if (!judged) {
+                        judged = true
+                        val across = kotlin.math.abs(change.position.x - start.x)
+                        val down = kotlin.math.abs(change.position.y - start.y)
+                        sideways = across > down
+                    }
+                    if (sideways || lock.value) return@detectVerticalDragGestures
                     // The finger's own path, not its place on a screen that
                     // moves under it as the player closes.
-                    travel.distance += amount
-                    tracker.addPosition(change.uptimeMillis, Offset(0f, travel.distance))
-                    if (lock.value) return@detectVerticalDragGestures
+                    travel.finger += amount
+                    tracker.addPosition(change.uptimeMillis, Offset(0f, travel.finger))
                     change.consume()
                     travel.fired = true
-                    onDragBy(amount)
+                    drag(amount)
                 }
             },
     ) {
@@ -228,8 +297,22 @@ private fun FollowingScreen(
 private class Travel {
     var distance = 0f
     var fired = false
+    /** Square Fusion: past the threshold, its haptic tick given. */
+    var armed = false
+    /** Square Fusion: the finger's own travel this gesture, for its speed. */
+    var finger = 0f
     /** Whether this gesture began by scrolling the content; null before it moves. */
     var scrolled: Boolean? = null
 }
 
 private val DISMISS_THRESHOLD = 110.dp
+
+/** Square Fusion: how far the finger goes before the player moves at all; see FollowingScreen. */
+private val FOLLOW_SLACK = 12.dp
+
+/** Square Fusion: how much of the finger's travel the player takes before the threshold. */
+private const val FOLLOW_RESISTANCE = 0.35f
+
+/** Square Fusion: a throw down this fast closes from [QUICK_CLOSE_SHARE] of the threshold. */
+private val QUICK_CLOSE_VELOCITY = 1500.dp
+private const val QUICK_CLOSE_SHARE = 0.6f

@@ -37,6 +37,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -239,9 +241,12 @@ fun LiquidBottomTabs(
 
         Row(
             Modifier
-                .graphicsLayer {
-                    translationX = panelOffset
-                }
+                // LOCAL CHANGE: moved where it is placed, not by a layer of its
+                // own. Inside the player that layer was drawn empty on every
+                // opening — the switcher showed only its lit tab — until a
+                // finger on it moved the offset and had it drawn again. Placed
+                // with the offset, the bar has no such layer to lose.
+                .offset { IntOffset(panelOffset.fastRoundToInt(), 0) }
                 // LOCAL CHANGE: the shell is made of the app's glass, like every
                 // other pane. The puck below keeps its own recipe on purpose —
                 // what it does is press-driven, a bend and a rim that only exist
@@ -290,9 +295,8 @@ fun LiquidBottomTabs(
                     .clearAndSetSemantics {}
                     .alpha(0f)
                     .layerBackdrop(tabsBackdrop)
-                    .graphicsLayer {
-                        translationX = panelOffset
-                    }
+                    // As the row above, and for the same reason.
+                    .offset { IntOffset(panelOffset.fastRoundToInt(), 0) }
                     .height(height - 8f.dp)
                     .fillMaxWidth()
                     .padding(horizontal = 4f.dp)

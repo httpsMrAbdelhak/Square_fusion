@@ -324,7 +324,7 @@ fun PlayerScreen(
     onCollapse: () -> Unit,
     /** Square Fusion: a drag down moves the player toward the bar by this many pixels; see DismissibleScreen. */
     onCollapseDrag: ((Float) -> Unit)? = null,
-    onCollapseRelease: ((Float) -> Unit)? = null,
+    onCollapseRelease: ((velocity: Float, close: Boolean) -> Unit)? = null,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -1143,6 +1143,8 @@ fun PlayerScreen(
                                 }
                             }
                         }
+                        // Square Fusion: over the picture while it travels too.
+                        .dockControls()
                         .systemBarsPadding()
                         .padding(horizontal = 20.dp),
                 ) {

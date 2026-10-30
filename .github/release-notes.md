@@ -1,4 +1,6 @@
-## Corrections
-- Lecteur : la pochette ne clignote plus en ouvrant le lecteur depuis le mini-lecteur. Comme dans BitChord, l'image qui voyage est celle que le lecteur affiche déjà (rien n'est chargé pendant le trajet), l'ouverture attend que le lecteur soit en place avant de partir, et seul l'image du lecteur s'efface pendant le trajet au lieu de tout le haut du lecteur.
-- Lecteur : la pochette du titre s'affiche dès l'ouverture, sans attendre la recherche d'une autre image.
-- Nouveautés : les classements suivent le pays du contenu musical choisi.
+## Corrections du lecteur
+- La barre des sections (pochette, paroles, file d'attente, effets, crédits) est entière à chaque ouverture du lecteur. Une couche graphique servant seulement à la décaler restait vide jusqu'à ce qu'on la touche.
+- Le glissement vers le bas retrouve son seuil d'origine : 110 dp de déplacement, avec une vibration au passage du seuil. Avant le seuil, le lecteur résiste et revient en place au relâchement ; un mouvement de côté ne réduit jamais le lecteur.
+- Pendant la réduction et l'ouverture, la flèche, la mention du haut et le bouton du clip restent au-dessus de la pochette et accompagnent le lecteur au lieu de disparaître.
+- Le mini-lecteur reste en place sous le lecteur pendant tout le trajet de la pochette.
+- Le verre du lecteur garde son reflet pendant le trajet : plus de flou qui change d'un coup au relâchement. Le bas flouté de la pochette voyage avec elle.

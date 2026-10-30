@@ -270,23 +270,47 @@ retour de la connexion, il est rechargé automatiquement s'il était vide ou en
 erreur ; un accueil déjà affiché n'est pas rechargé.
 
 ### Réduction du lecteur
-Glisser vers le bas, depuis le haut du contenu, fait descendre le lecteur
-avec le doigt ; relâché, il se range dans le mini-lecteur ou revient, selon
-la vitesse et la distance. La flèche utilise la même animation.
+Glisser vers le bas, depuis le haut du contenu, réduit le lecteur au même seuil
+qu'avant les changements de Square Fusion : 110 dp de déplacement du doigt,
+avec une vibration (retour haptique « appui long ») au moment où il est
+franchi. Le lecteur suit le doigt avec une résistance : rien sur les 12
+premiers dp, puis un tiers du déplacement jusqu'au seuil, puis un pour un.
+Relâché avant le seuil, il revient ouvert ; après, il se range dans le
+mini-lecteur avec la vitesse du doigt. Remonter avant de lâcher rend la
+distance. Un jet très rapide (1 500 dp/s) ferme dès 60 % du seuil. Un geste
+qui part plus de côté que vers le bas (la barre des sections, la pochette)
+n'est jamais pris pour une réduction. La flèche utilise la même animation.
 
 ### Ouverture et fermeture du lecteur (d'après BitChord)
 Repris du code de BitChord (`PlayerSheetMotion`, `PlayerDock`) : le lecteur
 glisse comme une feuille sur un ressort amorti sans rebond (raideur 195,
-environ 0,45 s), le reste du lecteur apparaît avec 15 % d'avance sur la
+environ 0,45 s), le reste du lecteur s'efface avec 15 % d'avance sur la
 pochette, et une seule pochette voyage entre la couverture du mini-lecteur et
-l'image en haut du lecteur. Elle est remise en page à chaque image, de sorte
-que le carré du mini-lecteur devienne le 3:4 du lecteur sans être étiré. Les
-deux pochettes d'origine sont masquées pendant le trajet. Bouton, flèche et
-glissement utilisent la même animation ; un glissement vers le haut ouvre au-delà
-de la moitié ou sur un geste rapide (400 dp/s), un glissement vers le bas ferme
-au-delà de 56 dp ou sur un geste rapide (125 dp/s), comme la feuille Material
-de BitChord. Avec un Canvas ou une vidéo en haut du lecteur, l'ancienne
-apparition en fondu est gardée (pas d'image à faire voyager).
+l'image en haut du lecteur. C'est l'image même que le lecteur a décodée,
+jamais une copie chargée pendant le trajet. Elle est remise en page à chaque
+image, de sorte que le carré du mini-lecteur devienne le 3:4 du lecteur sans
+être étiré, et prend le bas fondu du lecteur en arrivant.
+
+Pendant le trajet :
+- les commandes du lecteur (flèche, ligne du haut, bouton du clip, titre,
+  transport, barre des sections) sont redessinées au-dessus de la pochette,
+  comme lorsque le lecteur est ouvert, et s'effacent avec lui ;
+- le mini-lecteur reste en place sous le lecteur ; seule sa pochette est
+  masquée ;
+- le verre du lecteur garde le reflet pris avant le trajet
+  (`LocalBackdropHeldWhole`) : l'image du haut étant partie voyager, un
+  rafraîchissement aurait changé le flou sous les boutons au relâchement ;
+- le bas flouté de la grande image part avec elle.
+
+À l'ouverture depuis le mini-lecteur, le lecteur est d'abord mis en page hors
+de l'écran avec son image (300 ms au plus, comme BitChord), puis glisse.
+
+### Barre des sections du lecteur
+Elle était décalée par une couche graphique à elle, qui s'affichait vide à
+l'ouverture du lecteur jusqu'à ce qu'un doigt la touche : seule la pastille
+de la section choisie restait visible. Le décalage passe maintenant par le
+placement (`offset`), sans couche. Constaté et vérifié sur l'émulateur Android
+11 (barre entière sur cinq ouvertures de suite).
 
 ### Pochettes
 - La source choisie dans Paramètres › Lecture › Pochettes décide d'où viennent les images. Spotify (Canvas) : la pochette du
