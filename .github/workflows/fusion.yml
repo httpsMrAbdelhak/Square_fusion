@@ -302,6 +302,22 @@ jobs:
             done
           done
 
+      # A failed run's recording and logs, where they can be read without the
+      # artifact store: a prerelease named ci-debug, which is not an app
+      # release (the app's update check only reads the latest full release).
+      - name: Keep a failed run's recording readable
+        if: failure() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          zip -qr debug-results.zip playback playback-log.txt smoke-log.txt instrumented-log.txt 2>/dev/null || true
+          [ -f debug-results.zip ] || exit 0
+          gh release view ci-debug > /dev/null 2>&1 || gh release create ci-debug --prerelease \
+            --title "CI debug (not an app release)" \
+            --notes "Recording and logs of the last failed emulator run. Not an app build." || true
+          gh release upload ci-debug debug-results.zip --clobber || true
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
