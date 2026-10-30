@@ -262,9 +262,12 @@ dump views; pause=$(find_last views "desc in ('Pause', 'Play') and y1 > $H // 2"
 if [ -n "$pause" ]; then
   ty=$(( ${pause#* } + $(dp 77) ))
   i=0
-  for tab in Cover Lyrics Queue Effects Credits; do
+  # The lyrics last: while a song is meant to be playing, the player leaves
+  # them alone on screen after a few seconds, switcher and all, as Apple
+  # Music does, until the screen is touched.
+  for tab in Cover Queue Effects Credits Lyrics; do
+    case $tab in Cover) i=0;; Lyrics) i=1;; Queue) i=2;; Effects) i=3;; Credits) i=4;; esac
     tx=$(( W * 8 / 100 + (W * 84 / 100) * (2 * i + 1) / 10 ))
-    i=$((i + 1))
     # Where the transport is now: a view can move it.
     dump "before-$tab"; p2=$(find_last "before-$tab" "desc in ('Pause', 'Play') and y1 > $H // 2")
     [ -n "$p2" ] && ty=$(( ${p2#* } + $(dp 77) ))
@@ -273,6 +276,8 @@ if [ -n "$pause" ]; then
     case $tab in Cover) want='Trending now|Now playing|text="[^"]+"';; Lyrics) want='text="Lyrics"';; Queue) want='text="Queued"';; Effects) want='text="Effects"';; Credits) want='text="Credits"';; esac
     if grep -qE "$want" "$OUT/view-$tab.xml"; then echo "OK   the $tab tab opens its view"; else echo "FAIL the $tab tab did not open its view"; fail=1; fi
   done
+  # Back to the cover: a touch first brings the switcher back over the lyrics.
+  adb shell input tap $((W / 2)) $((H / 8)); settle 2
   adb shell input tap $(( W * 8 / 100 + (W * 84 / 100) / 10 )) $ty; settle 2
 else
   echo "FAIL no transport to find the tabs under"; fail=1
