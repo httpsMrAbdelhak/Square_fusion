@@ -29,6 +29,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import androidx.compose.foundation.shape.CornerBasedShape
+import kotlin.math.tanh
 
 /**
  * BitChord Glass: the surface of Square's [LiquidButton] on its own — the

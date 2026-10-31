@@ -155,14 +155,6 @@ internal fun EffectsPanel(
     }
 }
 
-/**
- * When to stop, under the things that change how it sounds.
- *
- * Here rather than in the settings because it is about the song playing now,
- * like everything else in this panel, and because it is set from bed. What it
- * sets lives in the service; see SleepTimer.
- */
-@Composable
 @Composable
 private fun PresetRow(
     presets: List<EffectPreset>,
