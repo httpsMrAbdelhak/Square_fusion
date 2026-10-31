@@ -38,12 +38,16 @@ object AppUpdateChecker {
         val apkUrl: String?,
         /** The release's own Markdown body, shown as this update's "what's new". */
         val notes: String?,
+        /** The APK's SHA-256 as the release publishes it; the download is refused on a mismatch. */
+        val sha256: String? = null,
     )
 
     private const val CACHE_SUBDIR = "updates"
 
     private const val LATEST_RELEASE_URL =
-        "https://api.github.com/repos/kushagrasinghx/BitChord/releases/latest"
+        // BitChord Glass: this fork's own rolling release, not the official
+        // one — whose APK is a different package. See docs/GLASS.md.
+        "https://api.github.com/repos/httpsMrAbdelhak/square_fusion/releases/tags/bitchord-latest"
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -76,9 +80,11 @@ object AppUpdateChecker {
             val url = release["html_url"]?.jsonPrimitive?.contentOrNull ?: return@runCatching
             val apkUrl = apkAssetUrl(release)
             val notes = release["body"]?.jsonPrimitive?.contentOrNull
-            val latest = tag.removePrefix("v")
+            // The fork's rolling tag never changes, so the version is the
+            // release's name ("1.9.42"), not its tag.
+            val latest = (release["name"]?.jsonPrimitive?.contentOrNull ?: tag).removePrefix("v").trim()
             if (isNewer(latest, BuildConfig.VERSION_NAME)) {
-                _available.value = UpdateInfo(latest, url, apkUrl, notes)
+                _available.value = UpdateInfo(latest, url, apkUrl, notes, apkSha256(release, apkUrl))
             }
         }
     }
@@ -127,6 +133,41 @@ object AppUpdateChecker {
     }.getOrNull()
 
     /**
+     * The expected SHA-256 of the chosen APK: GitHub's own `digest` for the
+     * asset, else the `<name>.sha256` file published beside it. Null when
+     * neither is there, and then the download is refused rather than trusted.
+     */
+    private fun apkSha256(release: JsonObject, apkUrl: String?): String? = runCatching {
+        apkUrl ?: return null
+        val assets = release["assets"]?.jsonArray?.mapNotNull { it as? JsonObject }.orEmpty()
+        val asset = assets.firstOrNull { it["browser_download_url"]?.jsonPrimitive?.contentOrNull == apkUrl }
+        asset?.get("digest")?.jsonPrimitive?.contentOrNull
+            ?.takeIf { it.startsWith("sha256:") }?.removePrefix("sha256:")
+            ?.let { return it.lowercase() }
+        val name = asset?.get("name")?.jsonPrimitive?.contentOrNull ?: return null
+        val sumUrl = assets.firstOrNull { it["name"]?.jsonPrimitive?.contentOrNull == "$name.sha256" }
+            ?.get("browser_download_url")?.jsonPrimitive?.contentOrNull ?: return null
+        Http.client.newCall(Request.Builder().url(sumUrl).build()).execute().use { response ->
+            if (!response.isSuccessful) null
+            else response.body?.string()?.trim()?.substringBefore(' ')?.lowercase()
+                ?.takeIf { it.length == 64 && it.all { c -> c in "0123456789abcdef" } }
+        }
+    }.getOrNull()
+
+    private fun sha256Of(file: File): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read == -1) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /**
      * Streams the current update's APK into the app cache, reporting progress
      * through [download]. A finished file survives a cancelled dialog: until
      * the state is reset, "Install Now" comes straight back without a second
@@ -170,6 +211,11 @@ object AppUpdateChecker {
                         }
                     }
                 }
+            }
+            val expected = info.sha256
+            if (expected == null || sha256Of(target) != expected) {
+                target.delete()
+                error(if (expected == null) "No checksum published for this update" else "Checksum mismatch")
             }
             _download.value = DownloadState.Ready(target)
         }.onFailure { error ->

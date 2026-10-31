@@ -63,6 +63,8 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         AndroidStreamHooks.installEarly()
         PlayerPlatform.install(AndroidPlayerHost(this))
         com.music.bitchord.ui.AppUi.install(com.music.bitchord.ui.AndroidAppUiHost)
+        // BitChord Glass: background check of the fork's release (docs/GLASS.md).
+        com.music.bitchord.glass.update.UpdateNotifier.schedule(this)
         // The shared data layer (lyrics, the YouTube Music client) logs to
         // logcat on debug builds only, as the app's own DebugLog always has.
         if (BuildConfig.DEBUG) {

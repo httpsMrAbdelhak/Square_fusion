@@ -44,6 +44,14 @@ buildscript {
 extra["bitchordVersionCode"] = 36
 extra["bitchordVersionName"] = "1.9"
 
+// BitChord Glass (this fork): CI passes -PglassBuild=<run number>. The build
+// number rides on top of BitChord's own version, so an official version bump
+// still orders above every fork build of the version before it. See docs/GLASS.md.
+(findProperty("glassBuild") as String?)?.toIntOrNull()?.let { build ->
+    extra["bitchordVersionCode"] = (extra["bitchordVersionCode"] as Int) * 10000 + build
+    extra["bitchordVersionName"] = "${extra["bitchordVersionName"]}.$build"
+}
+
 /*
  * Bump this by hand before cutting each sideloaded test build ("beta2",
  * "beta3", ...) and blank it out before cutting the real release. Marks the

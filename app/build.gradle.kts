@@ -83,7 +83,7 @@ android {
         // Which release assets are this app's: the phone and TV APKs ship in
         // the same GitHub release, told apart by file name. See
         // AppUpdateChecker.apkAssetUrl.
-        buildConfigField("String", "UPDATE_APK_PREFIX", "\"BitChord-\"")
+        buildConfigField("String", "UPDATE_APK_PREFIX", "\"BitChord-glass\"")
     }
 
     splits {
@@ -119,6 +119,8 @@ android {
             resValue("string", "app_name", "BitChord Dev")
         }
         create("prod") {
+            // BitChord Glass: its own package, installable beside the official app.
+            applicationIdSuffix = ".glass"
             dimension = "env"
             // Matches defaultConfig — this is the package already shipped/installed.
         }

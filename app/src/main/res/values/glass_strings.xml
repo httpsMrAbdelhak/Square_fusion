@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BitChord Glass strings, kept apart from BitChord's own. -->
+<resources>
+    <string name="glass_update_channel">App updates</string>
+    <string name="glass_update_title">Update available</string>
+    <string name="glass_update_text">BitChord %1$s is ready to install</string>
+</resources>

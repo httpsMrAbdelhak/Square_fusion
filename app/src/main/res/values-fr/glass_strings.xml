@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="glass_update_channel">Mises à jour de l\'app</string>
+    <string name="glass_update_title">Mise à jour disponible</string>
+    <string name="glass_update_text">BitChord %1$s est prêt à installer</string>
+</resources>

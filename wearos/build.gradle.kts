@@ -57,6 +57,8 @@ android {
             resValue("string", "app_name", "BitChord Dev")
         }
         create("prod") {
+            // BitChord Glass: its own package, installable beside the official app.
+            applicationIdSuffix = ".glass"
             dimension = "env"
             resValue("string", "app_name", "BitChord")
         }

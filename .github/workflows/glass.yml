@@ -1,0 +1,128 @@
+name: BitChord Glass APK
+
+# BitChord Glass (this fork) — every push to the bitchord-glass branch builds
+# the prod release APK, and publishes it to the rolling "bitchord-latest"
+# release that the in-app updater reads. See docs/GLASS.md.
+#
+# Signing: the four GLASS_SIGNING_* secrets when set; otherwise a CI key kept
+# in the Actions cache, so successive builds install over one another.
+on:
+  push:
+    branches: [bitchord-glass]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: glass-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      version: ${{ steps.id.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build identity
+        id: id
+        run: |
+          base=$(grep -oP 'extra\["bitchordVersionName"\] = "\K[^"]+' build.gradle.kts)
+          echo "version=$base.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore CI signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/glass-ci.jks
+          key: glass-ci-keystore-v1
+
+      - name: Signing key
+        env:
+          KEYSTORE: ${{ secrets.GLASS_SIGNING_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.GLASS_SIGNING_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.GLASS_SIGNING_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.GLASS_SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/glass.jks"
+            store="$RUNNER_TEMP/glass.jks"
+          else
+            mkdir -p ~/.android
+            if [ ! -f ~/.android/glass-ci.jks ]; then
+              keytool -genkeypair -keystore ~/.android/glass-ci.jks -storepass glassci \
+                -alias glass -keypass glassci -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=BitChord Glass CI"
+            fi
+            store=~/.android/glass-ci.jks STORE_PASSWORD=glassci KEY_ALIAS=glass KEY_PASSWORD=glassci
+          fi
+          {
+            echo "storeFile=$store"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > keystore.properties
+
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          ./gradlew testDevDebugUnitTest -PglassBuild=${{ github.run_number }} 2>&1 | tee "$RUNNER_TEMP/tests.log"
+
+      - name: Build release APK
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleProdRelease -PglassBuild=${{ github.run_number }} 2>&1 | tee "$RUNNER_TEMP/build.log"
+          mkdir -p out
+          apk=$(ls app/build/outputs/apk/prod/release/*universal*.apk | head -n1)
+          cp "$apk" out/BitChord-glass.apk
+          (cd out && sha256sum BitChord-glass.apk > BitChord-glass.apk.sha256)
+          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs out/BitChord-glass.apk | head -n 3
+          cat out/BitChord-glass.apk.sha256
+
+      - name: Explain failure
+        if: failure()
+        run: |
+          for log in "$RUNNER_TEMP/tests.log" "$RUNNER_TEMP/build.log"; do
+            [ -f "$log" ] || continue
+            grep -E "^e: |FAILED|What went wrong|error:" "$log" | head -n 40 | while IFS= read -r line; do
+              echo "::error title=$(basename "$log")::${line:0:400}"
+            done
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bitchord-glass-${{ steps.id.outputs.version }}
+          path: out/
+
+  publish:
+    needs: apk
+    if: github.ref == 'refs/heads/bitchord-glass'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: bitchord-glass-${{ needs.apk.outputs.version }}
+          path: out
+      - name: Rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.apk.outputs.version }}
+        run: |
+          {
+            cat .github/glass-release-notes.md
+            echo
+            echo "SHA-256: \`$(cut -d' ' -f1 out/BitChord-glass.apk.sha256)\`"
+          } > notes.md
+          gh release delete bitchord-latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create bitchord-latest out/BitChord-glass.apk out/BitChord-glass.apk.sha256 \
+            --target "$GITHUB_SHA" --prerelease --title "$VERSION" --notes-file notes.md
