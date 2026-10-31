@@ -124,7 +124,7 @@ PY
 }
 open_from_bar() {
   local b; b=$(bar_title)
-  [ -n "$b" ] || { echo "LOG no bar to open from ($1)"; return 1; }
+  [ -n "$b" ] || { echo "LOG no bar to open from (${1:-})"; return 1; }
   adb shell input tap $b
   local i
   for i in 1 2 3 4 5; do settle 2; close_on_screen && return 0; done
@@ -326,6 +326,9 @@ if [ -n "$zp" ]; then
     dump "zone-$name"; zp=$(find_last "zone-$name" "desc in ('Pause', 'Play') and y1 > $H // 2")
     [ -n "$zp" ] || { echo "WARN no transport to find the $name tab"; continue; }
     adb shell input tap $(( W * 8 / 100 + (W * 84 / 100) * (2 * i + 1) / 10 )) $(( ${zp#* } + $(dp 77) )); settle 2
+    dump "zone-open-$name"; shot "zone-open-$name" > /dev/null
+    case $name in Queue) want=Queued;; *) want=$name;; esac
+    grep -q "text=\"$want\"" "$OUT/zone-open-$name.xml" || echo "LOG the $name view did not open before the drag"
     drag $DX $DY 200 16 0; settle 3
     if close_on_screen; then echo "OK   a 200 dp drag with $name open leaves the player open"; else echo "FAIL a drag with $name open closed the player"; fail=1; open_from_bar > /dev/null; fi
     # Back to the cover through the screen's top, then its tab.
