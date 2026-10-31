@@ -37,7 +37,7 @@ jobs:
       - name: Build identity
         id: id
         run: |
-          base=$(grep -oP 'extra\["bitchordVersionName"\] = "\K[^"]+' build.gradle.kts)
+          base=$(grep -m1 -oP '^extra\["bitchordVersionName"\] = "\K[^"]+' build.gradle.kts)
           echo "version=$base.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
       - name: Restore CI signing key
