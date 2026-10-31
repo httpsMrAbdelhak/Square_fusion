@@ -6,6 +6,9 @@ on:
   push:
     branches: [glass-wip]
 
+permissions:
+  contents: write
+
 concurrency:
   group: glass-check-${{ github.ref }}
   cancel-in-progress: true
@@ -25,9 +28,15 @@ jobs:
         run: |
           set -o pipefail
           ./gradlew :app:compileDevDebugKotlin -Pbitchord.bundleWear=false 2>&1 | tee "$RUNNER_TEMP/build.log"
+          ./gradlew :app:assembleProdRelease --stacktrace 2>&1 | tee "$RUNNER_TEMP/release.log"
       - name: Explain failure
         if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          gh release view glass-ci-debug >/dev/null 2>&1 || gh release create glass-ci-debug --prerelease --title "CI debug (not an app release)" --notes "Build logs."
+          for f in "$RUNNER_TEMP"/*.log; do cp "$f" "wip${{ github.run_number }}-$(basename "$f")"; done
+          gh release upload glass-ci-debug wip${{ github.run_number }}-*.log --clobber || true
           grep -E "^e: |What went wrong|error:" "$RUNNER_TEMP/build.log" | head -n 50 | while IFS= read -r line; do
             echo "::error::${line:0:600}"
           done

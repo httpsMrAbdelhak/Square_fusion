@@ -93,10 +93,26 @@ jobs:
         run: |
           for log in "$RUNNER_TEMP/tests.log" "$RUNNER_TEMP/build.log"; do
             [ -f "$log" ] || continue
-            grep -E "^e: |FAILED|What went wrong|error:" "$log" | head -n 40 | while IFS= read -r line; do
+            grep -E "^e: |FAILED|What went wrong|Execution failed|error:" "$log" | grep -v "incompatible version of Kotlin" | head -n 40 | while IFS= read -r line; do
               echo "::error title=$(basename "$log")::${line:0:400}"
             done
           done
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-logs-${{ github.run_number }}
+          path: ${{ runner.temp }}/*.log
+
+      # Logs readable without the Actions artifact store: a debug pre-release.
+      - name: Publish logs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view glass-ci-debug >/dev/null 2>&1 || gh release create glass-ci-debug --prerelease --title "CI debug (not an app release)" --notes "Build logs of failed runs."
+          for f in "$RUNNER_TEMP"/*.log; do cp "$f" "run${{ github.run_number }}-$(basename "$f")"; done
+          gh release upload glass-ci-debug run${{ github.run_number }}-*.log --clobber
 
       - uses: actions/upload-artifact@v4
         with:
@@ -127,6 +143,14 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim
           script: bash -c 'set -o pipefail; bash scripts/glass-emulator.sh out/BitChord-glass.apk 2>&1 | tee glass-test-log.txt'
+      - name: Publish test results
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zip -qr glass-test-${{ github.run_number }}.zip glass-test glass-test-log.txt || true
+          gh release view glass-ci-debug >/dev/null 2>&1 || gh release create glass-ci-debug --prerelease --title "CI debug (not an app release)" --notes "Build logs and test results."
+          gh release upload glass-ci-debug glass-test-${{ github.run_number }}.zip --clobber || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
