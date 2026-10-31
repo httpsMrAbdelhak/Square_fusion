@@ -330,6 +330,9 @@ if [ -n "$zp" ]; then
     case $name in Queue) want=Queued;; *) want=$name;; esac
     grep -q "text=\"$want\"" "$OUT/zone-open-$name.xml" || echo "LOG the $name view did not open before the drag"
     drag $DX $DY 200 16 0; settle 3
+    # Over the lyrics the player steps aside after a few seconds, arrow and
+    # all; a touch at the top brings it back before looking for the arrow.
+    adb shell input tap $((W / 2)) $((H / 16)); settle 1
     if close_on_screen; then echo "OK   a 200 dp drag with $name open leaves the player open"; else echo "FAIL a drag with $name open closed the player"; fail=1; open_from_bar > /dev/null; fi
     # Back to the cover through the screen's top, then its tab.
     adb shell input tap $((W / 2)) $((H / 8)); settle 1
