@@ -974,6 +974,16 @@ fun SettingsScreen(
                         onCheckedChange = AppSettings::setProgressiveBlur,
                     )
                 }
+                // BitChord Glass: Square's glass settings, as a page of their own.
+                val glassSettingsTitle = stringResource(R.string.glass_settings_title)
+                row(glassSettingsTitle, "glass", "liquid", "blur", "refraction") {
+                    SettingsRow(
+                        icon = SfIcons.Appearance,
+                        title = glassSettingsTitle,
+                        subtitle = stringResource(R.string.glass_settings_subtitle),
+                        onClick = { onOpenChoice(SettingsChoiceKind.LIQUID_GLASS) },
+                    )
+                }
             }
             // Left out where the player won't honour it: a window too wide for
             // the player to fill and too narrow to stand a page beside it keeps
@@ -2681,6 +2691,8 @@ enum class SettingsChoiceKind(@param:StringRes val title: Int) {
     AUTOMIX_PERFORMANCE(R.string.automix_performance),
     BIT_PERFECT(R.string.bit_perfect_output),
     FONT(R.string.font),
+    /** BitChord Glass: Square's glass settings; drawn by GlassPage, not by [SettingsChoicePage]. */
+    LIQUID_GLASS(R.string.glass_settings_title),
 }
 
 /** The main page's list of categories: a glyph and a name each, and a chevron into it. */
@@ -2721,6 +2733,7 @@ fun SettingsChoicePage(
     ) {
         SettingsPageTitle(stringResource(choice.title))
         when (choice) {
+            SettingsChoiceKind.LIQUID_GLASS -> Unit
             SettingsChoiceKind.AUDIO_QUALITY_WIFI, SettingsChoiceKind.AUDIO_QUALITY_CELLULAR -> {
                 val wifi = choice == SettingsChoiceKind.AUDIO_QUALITY_WIFI
                 val wifiQuality by AppSettings.audioQualityWifi.collectAsStateWithLifecycle()

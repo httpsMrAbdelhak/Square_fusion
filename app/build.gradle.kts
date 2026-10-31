@@ -345,6 +345,8 @@ dependencies {
     // [com.music.bitchord.ui.components.QrCode], so the result is styled like
     // the rest of the app rather than a stock black-and-white bitmap.
     implementation("com.google.zxing:core:3.5.3")
+    // BitChord Glass: the icon set of the glass components imported from Square.
+    implementation("com.adamglin:phosphor-icon:1.0.0")
 
     // ---- Markdown rendering (release notes in the update dialog) ----
     // Pure Compose, not an AndroidView wrapper — needed so the text composes

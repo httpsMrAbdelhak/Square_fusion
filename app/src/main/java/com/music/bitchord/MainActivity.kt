@@ -434,6 +434,8 @@ class MainActivity : AppCompatActivity() {
                     LocalLiquidGlassEnabled provides liquidGlassEnabled,
                     LocalAppBackdrop provides appBackdrop,
                 ) {
+                // BitChord Glass: Square's glass reads the same page recording.
+                com.music.bitchord.glass.integration.ProvideSquareGlass(appBackdrop) {
                 // The window's width, measured rather than asked for.
                 //
                 // `Configuration.screenWidthDp` is the wrong question here: in a
@@ -452,6 +454,7 @@ class MainActivity : AppCompatActivity() {
                         windowHeight = maxHeight,
                         appBackdrop = appBackdrop,
                     )
+                }
                 }
                 }
             }
@@ -3051,6 +3054,11 @@ private fun BitChordApp(
                                 onChosen = { navigator.pop() },
                                 contentPadding = listPadding,
                             )
+                        } else if (pageRoute is AppRoute.SettingsChoice &&
+                            pageRoute.choice == com.music.bitchord.ui.screens.SettingsChoiceKind.LIQUID_GLASS
+                        ) {
+                            // BitChord Glass: Square's glass settings page.
+                            com.music.bitchord.glass.integration.GlassSettingsPage(contentPadding = listPadding)
                         } else if (pageRoute is AppRoute.SettingsChoice) {
                             SettingsChoicePage(
                                 choice = pageRoute.choice,
