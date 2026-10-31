@@ -39,4 +39,25 @@
     <string name="glass_preview_tab_radio">Radio</string>
     <string name="glass_settings_title">Liquid Glass settings</string>
     <string name="glass_settings_subtitle">Material, refraction, tint and where the glass goes</string>
+    <string name="glass_unnamed">Untitled</string>
+    <string name="glass_fx_cancel">Cancel</string>
+    <string name="glass_fx_delete_preset">Delete %1$s</string>
+    <string name="glass_fx_name">Name</string>
+    <string name="glass_fx_off">Off</string>
+    <string name="glass_fx_pitch">Pitch</string>
+    <string name="glass_fx_preset_original">Original</string>
+    <string name="glass_fx_presets">PRESETS</string>
+    <string name="glass_fx_reset">Reset</string>
+    <string name="glass_fx_reverb">Reverb</string>
+    <string name="glass_fx_save">Save</string>
+    <string name="glass_fx_save_preset">Save preset</string>
+    <string name="glass_fx_speed">Speed</string>
+    <string name="glass_panel_cover">Cover</string>
+    <string name="glass_panel_lyrics">Lyrics</string>
+    <string name="glass_panel_queue">Queue</string>
+    <string name="glass_panel_effects">Effects</string>
+    <string name="glass_panel_credits">Credits</string>
+    <string name="glass_credits_performed">Performed by</string>
+    <string name="glass_credits_album">Album</string>
+    <string name="glass_credits_source">Source</string>
 </resources>

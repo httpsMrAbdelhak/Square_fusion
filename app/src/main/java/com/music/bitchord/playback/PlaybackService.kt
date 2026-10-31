@@ -3458,6 +3458,8 @@ class PlaybackService : MediaLibraryService() {
         // press before that steps to the previous one.
         .setMaxSeekToPreviousPositionMs(BACK_RESTARTS_AFTER_MS)
         .build()
+        // BitChord Glass: Square's pitch and reverb on this player.
+        .also { com.music.bitchord.glass.effects.GlassEffects.attach(this, it) }
 
     /**
      * Moves the session onto the player the crossfade has just started the

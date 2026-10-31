@@ -937,6 +937,10 @@ fun NowPlayingScreen(
         mutableStateOf(restoredPlayerScreen == LastPlayerScreen.LYRICS)
     }
     val queueSlide = remember { mutableFloatStateOf(0f) }
+    // BitChord Glass: effects or credits, shown in the queue's place (the
+    // queue's own open state carries the sleeve away for them); 0 for none.
+    var glassPanel by remember { mutableIntStateOf(0) }
+    LaunchedEffect(queueOpen) { if (!queueOpen) glassPanel = 0 }
     // Expensive, song-scoped preparation is deliberately staggered. The small
     // backdrop decode runs after the track hand-off has settled; lyrics and
     // queue are then composed offscreen on separate beats rather than all three
@@ -990,6 +994,7 @@ fun NowPlayingScreen(
     // open but the half-player was not, so every trip into lyrics briefly
     // started an exit animation and reversed it on the following frame.
     val openLyrics: () -> Unit = {
+        glassPanel = 0
         lyricsControlsOpen = true
         lyricsOpen = true
         queueOpen = false
@@ -1010,6 +1015,32 @@ fun NowPlayingScreen(
         if (opening) queueControlsOpen = true
         queueOpen = opening
         if (opening) closeLyrics()
+    }
+    // BitChord Glass: Square's switcher, onto the same open and close paths.
+    val glassSelected = when {
+        lyricsOpen -> GlassPanels.LYRICS
+        queueOpen && glassPanel != 0 -> glassPanel
+        queueOpen -> GlassPanels.QUEUE
+        else -> GlassPanels.COVER
+    }
+    val selectGlassPanel: (Int) -> Unit = { target ->
+        when (target) {
+            GlassPanels.COVER -> {
+                if (lyricsOpen) closeLyrics()
+                queueOpen = false
+                glassPanel = 0
+            }
+            GlassPanels.LYRICS -> if (!lyricsOpen) openLyrics()
+            GlassPanels.QUEUE -> {
+                glassPanel = 0
+                if (!queueOpen) toggleQueue()
+            }
+            else -> {
+                if (!queueOpen) toggleQueue()
+                queueControlsOpen = true
+                glassPanel = target
+            }
+        }
     }
     val lyricsLoadingLines = stringArrayResource(Res.array.lyrics_loading_lines)
     val lyricsLoadingText = remember(song.videoId) { lyricsLoadingLines.random() }
@@ -1567,9 +1598,16 @@ fun NowPlayingScreen(
     // layouts end on, and the only thing in the landscape player's left column
     // besides the sleeve.
     val playerActions: @Composable () -> Unit = {
+        val glassBar = PlayerPlatform.host.GlassPanelBar(
+            selected = glassSelected,
+            onSelect = selectGlassPanel,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (glassBar) Spacer(Modifier.height(10.dp))
         PlayerActionRow(
+            sideGlyphs = !glassBar,
             lyricsOpen = lyricsOpen,
-            queueOpen = queueOpen,
+            queueOpen = queueOpen && glassPanel == 0,
             shuffleEnabled = shuffleEnabled,
             repeatMode = repeatMode,
             autoplayEnabled = autoplayEnabled,
@@ -2237,7 +2275,9 @@ fun NowPlayingScreen(
                         }
                     },
                     queuePane = {
-                        InlineQueue(
+                        if (glassPanel != 0) {
+                            PlayerPlatform.host.GlassPanelContent(glassPanel, song, Modifier.fillMaxSize())
+                        } else InlineQueue(
                             queue = queue,
                             currentIndex = queueIndex,
                             autoplayEnabled = autoplayEnabled,
@@ -3816,7 +3856,9 @@ fun NowPlayingScreen(
                                         }
                                     },
                             ) {
-                                InlineQueue(
+                                if (glassPanel != 0) {
+                                    PlayerPlatform.host.GlassPanelContent(glassPanel, song, Modifier.weight(1f))
+                                } else InlineQueue(
                                     queue = queue,
                                     currentIndex = queueIndex,
                                     autoplayEnabled = autoplayEnabled,

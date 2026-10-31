@@ -54,6 +54,15 @@ import kotlin.math.roundToInt
  * moved into the shared module.
  */
 class AndroidPlayerHost(context: Context) : PlayerHost {
+    // BitChord Glass: Square's view switcher, effects and credits in the player.
+    @Composable
+    override fun GlassPanelBar(selected: Int, onSelect: (Int) -> Unit, modifier: Modifier): Boolean =
+        com.music.bitchord.glass.player.GlassPanelBar(selected, onSelect, modifier)
+
+    @Composable
+    override fun GlassPanelContent(panel: Int, song: Song, modifier: Modifier) =
+        com.music.bitchord.glass.player.GlassPanelContent(panel, song, modifier)
+
     private val app = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val main = Handler(Looper.getMainLooper())

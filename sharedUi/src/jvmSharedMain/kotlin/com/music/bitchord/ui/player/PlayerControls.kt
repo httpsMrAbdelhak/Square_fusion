@@ -594,6 +594,8 @@ internal fun PlayerActionRow(
     onListenTogether: () -> Unit,
     /** Opens [ListenTogetherMembersSheet] rather than settings directly. */
     onOpenListenTogetherMembers: () -> Unit,
+    /** BitChord Glass: false while Square's switcher above carries lyrics and queue. */
+    sideGlyphs: Boolean = true,
 ) {
     val showPartyButton by PlayerSettings.showListenTogetherButton.collectAsStateWithLifecycle()
     val inParty = rememberPartyBadge().inParty
@@ -621,7 +623,7 @@ internal fun PlayerActionRow(
             modifier = Modifier.fillMaxWidth().padding(horizontal = edgeInset),
             contentAlignment = Alignment.Center,
         ) {
-            Box(
+            if (sideGlyphs) Box(
                 Modifier
                     .align(Alignment.CenterStart)
                     .offset { IntOffset((closeIn.toPx() * compactness.value).roundToInt(), 0) },
@@ -701,7 +703,7 @@ internal fun PlayerActionRow(
                     )
                 }
             }
-            Box(
+            if (sideGlyphs) Box(
                 Modifier
                     .align(Alignment.CenterEnd)
                     .offset { IntOffset(-(closeIn.toPx() * compactness.value).roundToInt(), 0) },

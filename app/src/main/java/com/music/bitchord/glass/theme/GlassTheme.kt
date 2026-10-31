@@ -49,3 +49,7 @@ fun Modifier.softShadow(
     ambientColor = Color.Black.copy(alpha = ambient),
     spotColor = Color.Black.copy(alpha = spot),
 )
+
+/** Square's ink for a ground: dark on a light one, light on a dark one. */
+fun inkOn(ground: Color): Color =
+    if (ground.luminance() > 0.42f) Color(0xFF15161A) else Color(0xFFF7F8FA)

@@ -776,6 +776,9 @@ private fun BitChordApp(
     // Set each time the search tab is tapped, which SearchScreen uses as a
     // signal to focus the input field.
     var searchFocusRequested by remember { mutableStateOf(false) }
+    // BitChord Glass: true while Square's bar holds the search field, so the
+    // top bar does not draw a second one.
+    var barSearchField by remember { mutableStateOf(false) }
     val searchFieldFocus = remember { FocusRequester() }
     // Invalidates an in-flight radio lookup when a later play request wins.
     var playRequestGeneration by remember { mutableIntStateOf(0) }
@@ -3796,7 +3799,8 @@ private fun BitChordApp(
                     modifier = Modifier.align(Alignment.TopCenter),
                     // Only on the Search tab itself, not on anything pushed over it.
                     accessory = if (
-                        selectedTab == TAB_SEARCH && route == null && detail == null && selectedMoodGenre == null
+                        selectedTab == TAB_SEARCH && route == null && detail == null && selectedMoodGenre == null &&
+                        !barSearchField
                     ) {
                         {
                             // The search field lives up here in the bar, beside the
@@ -4129,7 +4133,21 @@ private fun BitChordApp(
                     // component they are stacked to imitate: the now playing
                     // controls dock into the tab bar rather than riding above it,
                     // and the pair folds together on scroll. See [GlassNavBar].
-                    GlassNavBar(
+                    // BitChord Glass: Square's bar, BitChord's tabs and pill.
+                    com.music.bitchord.glass.nav.SquareNavBar(
+                        query = query,
+                        onQueryChange = viewModel::onQueryChange,
+                        onSearchSubmit = viewModel::submitSearch,
+                        searchPlaceholder = org.jetbrains.compose.resources.stringResource(
+                            if (searchSource == SearchSource.LIBRARY) {
+                                SharedRes.string.search_library_hint
+                            } else if (searchSource == SearchSource.ADDONS) {
+                                SharedRes.string.search_addons_hint
+                            } else {
+                                SharedRes.string.search_hint
+                            },
+                        ),
+                        onSearchFieldShown = { barSearchField = it },
                         tabs = tabs,
                         selectedIndex = selectedTab,
                         onTabSelected = onTabSelected,

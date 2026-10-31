@@ -153,6 +153,27 @@ interface PlayerHost {
      */
     @Composable
     fun LyricsShareSheet(hazeState: HazeState, request: LyricsShareRequest, onDismiss: () -> Unit) = Unit
+
+    /**
+     * BitChord Glass: Square's panel switcher (cover, lyrics, queue, effects,
+     * credits; see [GlassPanels]). Returns false where the platform draws none,
+     * and the player then keeps its own lyrics and queue glyphs.
+     */
+    @Composable
+    fun GlassPanelBar(selected: Int, onSelect: (Int) -> Unit, modifier: Modifier): Boolean = false
+
+    /** BitChord Glass: the effects or credits view, in the queue's place. */
+    @Composable
+    fun GlassPanelContent(panel: Int, song: Song, modifier: Modifier) = Unit
+}
+
+/** BitChord Glass: the player's views, as Square's switcher orders them. */
+object GlassPanels {
+    const val COVER = 0
+    const val LYRICS = 1
+    const val QUEUE = 2
+    const val EFFECTS = 3
+    const val CREDITS = 4
 }
 
 private val NoCast = MutableStateFlow(CastUi())
