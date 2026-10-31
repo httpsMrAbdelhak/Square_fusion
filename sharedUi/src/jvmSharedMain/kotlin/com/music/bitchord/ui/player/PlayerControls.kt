@@ -221,7 +221,17 @@ internal fun PlayerScrubber(
     // One clock for the bar and the "Mixing" label, so they breathe on the same beat.
     val mixPulse = rememberMixPulse({ mixBlend.value }, enabled = !reduceAnimation)
     Column(Modifier.fillMaxWidth()) {
-        ThinSlider(
+        // BitChord Glass: Square's bubble bar, except while this bar has
+        // something of BitChord's own to draw — a version switch, a blend, or
+        // the planned transition window — when it is BitChord's bar as before.
+        val glassBar = !loading && !mixing && transitionWindow == null &&
+            PlayerPlatform.host.GlassScrubber(
+                value = { shown },
+                onValueChange = onScrub,
+                onValueChangeFinished = onScrubFinished,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        if (!glassBar) ThinSlider(
             value = shown,
             onValueChange = onScrub,
             onValueChangeFinished = onScrubFinished,

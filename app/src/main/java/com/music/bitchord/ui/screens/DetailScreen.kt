@@ -1,5 +1,6 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.glass.ui.squareGlassButton
 import com.music.bitchord.ui.components.trackArtSize
 import android.os.Build
 import com.music.bitchord.R
@@ -1578,21 +1579,15 @@ private fun ActionPill(
     // Resume rather than a flat tap: both start a queue, and the rising pair
     // says so.
     val haptics = rememberHaptics()
-    val content = if (filled) Color.Black else MaterialTheme.colorScheme.onSurface
+    val content = MaterialTheme.colorScheme.onSurface
     Row(
         modifier = modifier
             .height(size)
-            .clip(CircleShape)
-            .then(
-                if (filled) {
-                    Modifier.background(Color.White)
-                } else {
-                    Modifier
-                        .background(Color.White.copy(alpha = LIGHT_FILL_ALPHA), CircleShape)
-                        .liquidGlassRim(CircleShape)
-                        .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_EDGE_ALPHA), CircleShape)
-                },
-            )
+            // BitChord Glass: Square's playlist buttons — its glass, film and
+            // hairline, with the press and stretch — in place of the veil.
+            .squareGlassButton(CircleShape, flat = true)
+            .background(Color.White.copy(alpha = if (filled) 0.30f else 0.17f), CircleShape)
+            .border(0.6.dp, Color.White.copy(alpha = 0.26f), CircleShape)
             .clickable {
                 haptics.play(Haptic.Resume)
                 onClick()
@@ -1693,12 +1688,10 @@ private fun CircleIconButton(
         modifier = Modifier
             .size(size)
             .alpha(if (enabled) 1f else DISABLED_ACTION_ALPHA)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = LIGHT_FILL_ALPHA), CircleShape)
-            // The glass rim the floating bars wear, with Liquid Glass on. Rim
-            // only: over the page's flat tint a blurred fill would look the same.
-            .liquidGlassRim(CircleShape)
-            .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_EDGE_ALPHA), CircleShape)
+            // BitChord Glass: Square's CircleAction glass, press and stretch.
+            .squareGlassButton(CircleShape, flat = true)
+            .background(Color.White.copy(alpha = 0.17f), CircleShape)
+            .border(0.6.dp, Color.White.copy(alpha = 0.26f), CircleShape)
             .clickable(enabled = enabled) {
                 haptics.play(haptic)
                 onClick()

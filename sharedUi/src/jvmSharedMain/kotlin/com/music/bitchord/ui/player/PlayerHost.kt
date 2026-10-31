@@ -165,6 +165,19 @@ interface PlayerHost {
     /** BitChord Glass: the effects or credits view, in the queue's place. */
     @Composable
     fun GlassPanelContent(panel: Int, song: Song, modifier: Modifier) = Unit
+
+    /**
+     * BitChord Glass: Square's seek bar, whose thumb swells into a liquid
+     * glass bubble while it is held. Same contract as the player's own bar —
+     * scrubbed locally, committed once on release. False where there is none.
+     */
+    @Composable
+    fun GlassScrubber(
+        value: () -> Float,
+        onValueChange: (Float) -> Unit,
+        onValueChangeFinished: () -> Unit,
+        modifier: Modifier,
+    ): Boolean = false
 }
 
 /** BitChord Glass: the player's views, as Square's switcher orders them. */

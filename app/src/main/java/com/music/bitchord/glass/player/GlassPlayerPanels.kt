@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adamglin.PhosphorIcons
@@ -198,4 +199,40 @@ private fun CreditGroup(title: String, lines: List<String>) {
             Text(it, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = PlayerInk)
         }
     }
+}
+
+/**
+ * Square's seek bar (its GlassProgressBar given a backdrop): a 14dp dot at
+ * rest that swells into a 36dp glass bubble while held, bending the bar under
+ * it and stretching with the finger's speed. BitChord's seek is untouched: the
+ * values go to BitChord's scrub and its commit on release.
+ */
+@Composable
+fun GlassScrubber(
+    value: () -> Float,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    modifier: Modifier,
+): Boolean {
+    val held = 36.dp
+    com.music.bitchord.glass.ui.LiquidSlider(
+        value = value,
+        onValueChange = onValueChange,
+        onValueChangeFinished = onValueChangeFinished,
+        valueRange = 0f..1f,
+        visibilityThreshold = 0.0005f,
+        backdrop = rememberCanvasBackdrop { },
+        accentColor = PlayerInk,
+        trackColor = PlayerInk.copy(alpha = 0.25f),
+        thumbSize = androidx.compose.ui.unit.DpSize(held, held),
+        thumbRestScale = 14f / 36f,
+        thumbPressedScale = 1f,
+        modifier = modifier.layout { measurable, constraints ->
+            val tall = held.roundToPx()
+            val placeable = measurable.measure(constraints.copy(minHeight = tall, maxHeight = tall))
+            val room = 28.dp.roundToPx()
+            layout(placeable.width, room) { placeable.place(0, (room - placeable.height) / 2) }
+        },
+    )
+    return true
 }

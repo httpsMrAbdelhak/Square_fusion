@@ -1,5 +1,6 @@
 package com.music.bitchord.ui.components
 
+import com.music.bitchord.glass.ui.squareGlassButton
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -530,7 +531,8 @@ private fun artworkPageSurface(
         .clip(shape)
         .then(
             when {
-                useLiquidGlass -> Modifier.liquidGlass(shape)
+                // BitChord Glass: Square's button glass, with its press and stretch.
+                useLiquidGlass -> Modifier.squareGlassButton(shape)
                 reduceDynamicBlur || hazeState == null -> Modifier.background(container)
                 else -> Modifier.optimizedHazeEffect(
                     state = hazeState,

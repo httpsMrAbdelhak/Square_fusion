@@ -63,6 +63,14 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
     override fun GlassPanelContent(panel: Int, song: Song, modifier: Modifier) =
         com.music.bitchord.glass.player.GlassPanelContent(panel, song, modifier)
 
+    @Composable
+    override fun GlassScrubber(
+        value: () -> Float,
+        onValueChange: (Float) -> Unit,
+        onValueChangeFinished: () -> Unit,
+        modifier: Modifier,
+    ): Boolean = com.music.bitchord.glass.player.GlassScrubber(value, onValueChange, onValueChangeFinished, modifier)
+
     private val app = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val main = Handler(Looper.getMainLooper())
